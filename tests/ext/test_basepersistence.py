@@ -194,12 +194,9 @@ class TrackingPersistence(BasePersistence):
 
 class TrackingConversationHandler(ConversationHandler):
     def __init__(self, *args, **kwargs):
-        fallbacks = []
         states = {state.value: [self.build_handler(state)] for state in HandlerStates}
         entry_points = [self.build_handler(HandlerStates.END)]
-        super().__init__(
-            *args, **kwargs, fallbacks=fallbacks, states=states, entry_points=entry_points
-        )
+        super().__init__(*args, **kwargs, states=states, entry_points=entry_points)
 
     @staticmethod
     async def callback(update, context, state):
@@ -1238,7 +1235,6 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
             states={},
-            fallbacks=[],
             persistent=True,
             name="conv",
             block=False,
@@ -1311,7 +1307,6 @@ class TestBasePersistence:
                     )
                 ]
             },
-            fallbacks=[],
             persistent=True,
             name="conv",
             block=False,
@@ -1357,7 +1352,6 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
             states={},
-            fallbacks=[],
             persistent=True,
             name="conv",
             block=False,
@@ -1397,7 +1391,6 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
             states={},
-            fallbacks=[],
             persistent=True,
             name="conv",
             block=False,
@@ -1455,7 +1448,6 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
             states={},
-            fallbacks=[],
             persistent=True,
             name="conv",
             block=False,
@@ -1507,7 +1499,6 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
             states={HandlerStates.STATE_1: []},
-            fallbacks=[],
             persistent=True,
             name="conv",
             conversation_timeout=3,
@@ -1559,7 +1550,6 @@ class TestBasePersistence:
                     )
                 ]
             },
-            fallbacks=[],
             persistent=True,
             name="grand_child",
             map_to_parent={HandlerStates.END: HandlerStates.STATE_2},
@@ -1573,7 +1563,6 @@ class TestBasePersistence:
                     TrackingConversationHandler.build_handler(HandlerStates.STATE_2)
                 ],
             },
-            fallbacks=[],
             persistent=True,
             name="child",
             map_to_parent={HandlerStates.STATE_3: HandlerStates.STATE_2},
@@ -1589,7 +1578,6 @@ class TestBasePersistence:
                     )
                 ],
             },
-            fallbacks=[],
             persistent=True,
             name="parent",
         )

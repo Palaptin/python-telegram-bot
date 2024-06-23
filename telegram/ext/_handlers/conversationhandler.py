@@ -201,11 +201,11 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             defines the different states of conversation a user can be in and one or more
             associated :obj:`BaseHandler` objects that should be used in that state. The first
             handler whose :meth:`check_update` method returns :obj:`True` will be used.
-        fallbacks (List[:class:`telegram.ext.BaseHandler`]): A list of handlers that might be used
-            if the user is in a conversation, but every handler for their current state returned
-            :obj:`False` on :meth:`check_update`. The first handler which :meth:`check_update`
-            method returns :obj:`True` will be used. If all return :obj:`False`, the update is not
-            handled.
+        fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
+            might be used if the user is in a conversation, but every handler for their current
+            state returned :obj:`False` on :meth:`check_update`. The first handler which
+            :meth:`check_update` method returns :obj:`True` will be used. If all return
+            :obj:`False`, the update is not handled.
         allow_reentry (:obj:`bool`, optional): If set to :obj:`True`, a user that is currently in a
             conversation can restart the conversation by triggering one of the entry points.
             Default is :obj:`False`.
@@ -299,7 +299,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self,
         entry_points: List[BaseHandler[Update, CCT]],
         states: Dict[object, List[BaseHandler[Update, CCT]]],
-        fallbacks: List[BaseHandler[Update, CCT]],
+        fallbacks: Optional[List[BaseHandler[Update, CCT]]] = None,
         allow_reentry: bool = False,
         per_chat: bool = True,
         per_user: bool = True,
@@ -317,6 +317,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             PreCheckoutQueryHandler,
             ShippingQueryHandler,
         )
+
+        if fallbacks is None:
+            fallbacks = []
 
         # self.block is what the Application checks and we want it to always run CH in a blocking
         # way so that CH can take care of any non-blocking logic internally

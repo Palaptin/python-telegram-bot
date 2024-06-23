@@ -251,7 +251,7 @@ class TestConversationHandler:
         return self._set_state(update, self.STOPPING)
 
     def test_slot_behaviour(self):
-        handler = ConversationHandler(entry_points=[], states={}, fallbacks=[])
+        handler = ConversationHandler(entry_points=[], states={})
         for attr in handler.__slots__:
             assert getattr(handler, attr, "err") != "err", f"got extra slot '{attr}'"
         assert len(mro_slots(handler)) == len(set(mro_slots(handler))), "duplicate slot"
@@ -287,9 +287,7 @@ class TestConversationHandler:
 
     def test_init_persistent_no_name(self):
         with pytest.raises(ValueError, match="can't be persistent when handler is unnamed"):
-            ConversationHandler(
-                self.entry_points, states=self.states, fallbacks=[], persistent=True
-            )
+            ConversationHandler(self.entry_points, states=self.states, persistent=True)
 
     def test_repr_no_truncation(self):
         # ConversationHandler's __repr__ is not inherited from BaseHandler.
@@ -297,7 +295,6 @@ class TestConversationHandler:
             name="test_handler",
             entry_points=[],
             states=self.drinking_states,
-            fallbacks=[],
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
@@ -317,7 +314,6 @@ class TestConversationHandler:
             name="test_handler",
             entry_points=[],
             states=states,
-            fallbacks=[],
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
@@ -524,7 +520,7 @@ class TestConversationHandler:
         indirect=False,
     )
     def test_immutable(self, attr):
-        ch = ConversationHandler(entry_points=[], states={}, fallbacks=[])
+        ch = ConversationHandler(entry_points=[], states={})
         with pytest.raises(AttributeError, match=f"You can not assign a new value to {attr}"):
             setattr(ch, attr, True)
 
@@ -533,7 +529,6 @@ class TestConversationHandler:
             ConversationHandler(
                 entry_points=[],
                 states={},
-                fallbacks=[],
                 per_chat=False,
                 per_user=False,
                 per_message=False,
@@ -851,7 +846,6 @@ class TestConversationHandler:
                 1: [CallbackQueryHandler(one, pattern="^1$")],
                 2: [CallbackQueryHandler(two, pattern="^2$")],
             },
-            fallbacks=[],
             per_message=True,
             per_chat=not inline,
         )
@@ -911,7 +905,7 @@ class TestConversationHandler:
 
     async def test_end_on_first_message(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}, fallbacks=[]
+            entry_points=[CommandHandler("start", self.start_end)], states={}
         )
         app.add_handler(handler)
 
@@ -937,7 +931,6 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", callback=self.start_end, block=False)],
             states={},
-            fallbacks=[],
         )
         app.add_handler(handler)
 
@@ -969,7 +962,7 @@ class TestConversationHandler:
 
     async def test_none_on_first_message(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, self.start_none)], states={}, fallbacks=[]
+            entry_points=[MessageHandler(filters.ALL, self.start_none)], states={}
         )
         app.add_handler(handler)
 
@@ -987,7 +980,6 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", self.start_none, block=False)],
             states={},
-            fallbacks=[],
         )
         app.add_handler(handler)
 
@@ -1018,7 +1010,7 @@ class TestConversationHandler:
 
     async def test_per_chat_message_without_chat(self, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}, fallbacks=[]
+            entry_points=[CommandHandler("start", self.start_end)], states={}
         )
         cbq = CallbackQuery(0, user1, None, None)
         cbq.set_bot(bot)
@@ -1027,7 +1019,7 @@ class TestConversationHandler:
 
     async def test_channel_message_without_chat(self, bot):
         handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, self.start_end)], states={}, fallbacks=[]
+            entry_points=[MessageHandler(filters.ALL, self.start_end)], states={}
         )
         message = Message(0, date=None, chat=Chat(0, Chat.CHANNEL, "Misses Test"))
         message.set_bot(bot)
@@ -1041,7 +1033,7 @@ class TestConversationHandler:
 
     async def test_all_update_types(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}, fallbacks=[]
+            entry_points=[CommandHandler("start", self.start_end)], states={}
         )
         message = Message(0, None, self.group, from_user=user1, text="ignore")
         message.set_bot(bot)
@@ -2098,7 +2090,6 @@ class TestConversationHandler:
         conv_handler = ConversationHandler(
             entry_points=[MessageHandler(filters.ALL, callback=callback, block=False)],
             states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
-            fallbacks=[],
             conversation_timeout=0.5,
         )
         app.add_handler(conv_handler)
@@ -2130,7 +2121,6 @@ class TestConversationHandler:
         conv_handler = ConversationHandler(
             entry_points=[MessageHandler(filters.ALL, callback=self.start_end)],
             states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
-            fallbacks=[],
             conversation_timeout=0.5,
         )
         app.add_handler(conv_handler)
@@ -2292,7 +2282,6 @@ class TestConversationHandler:
                 ],
                 1: [MessageHandler(filters.Regex("2"), callback_3)],
             },
-            fallbacks=[],
         )
         app.add_handler(conv_handler)
 
