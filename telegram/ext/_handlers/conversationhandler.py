@@ -150,14 +150,19 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     conversation, for example with a :class:`telegram.ext.CommandHandler` or
     :class:`telegram.ext.MessageHandler`.
 
-    The second collection, a :obj:`dict` named :attr:`states`, contains the different conversation
+    The second collection, a :obj:`list` named :attr:`pre_fallbacks`, is used if the user is
+    currently in a conversation and will be checked before the states defined in :attr:`states`.
+    You could use this for a ``/help`` command, which won't be checked in the :attr:`states`
+    collection.
+
+    The third collection, a :obj:`dict` named :attr:`states`, contains the different conversation
     steps and one or more associated handlers that should be used if the user sends a message when
     the conversation with them is currently in that state. Here you can also define a state for
     :attr:`TIMEOUT` to define the behavior when :attr:`conversation_timeout` is exceeded, and a
     state for :attr:`WAITING` to define behavior when a new update is received while the previous
     :attr:`block=False <block>` handler is not finished.
 
-    The third collection, a :obj:`list` named :attr:`fallbacks`, is used if the user is currently
+    The fourth collection, a :obj:`list` named :attr:`fallbacks`, is used if the user is currently
     in a conversation but the state has either no associated handler or the handler that is
     associated to the state is inappropriate for the update, for example if the update contains a
     command, but a regular text message is expected. You could use this for a ``/cancel`` command
@@ -201,6 +206,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             defines the different states of conversation a user can be in and one or more
             associated :obj:`BaseHandler` objects that should be used in that state. The first
             handler whose :meth:`check_update` method returns :obj:`True` will be used.
+        pre_fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
+            will be checked at first if the user is in a conversation. The first handler which
+            :meth:`check_update` method returns :obj:`True` will be used. If all return
+            :obj:`False`, the update is not handled.
         fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             might be used if the user is in a conversation, but every handler for their current
             state returned :obj:`False` on :meth:`check_update`. The first handler which
@@ -243,8 +252,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             its parent conversation handler in place of a specified nested state.
         block (:obj:`bool`, optional): Pass :obj:`False` or :obj:`True` to set a default value for
             the :attr:`BaseHandler.block` setting of all handlers (in :attr:`entry_points`,
-            :attr:`states` and :attr:`fallbacks`). The resolution order for checking if a handler
-            should be run non-blocking is:
+            :attr:`pre_fallbacks`, :attr:`states` and :attr:`fallbacks`). The resolution order for
+            checking if a handler should be run non-blocking is:
 
             1. :attr:`telegram.ext.BaseHandler.block` (if set)
             2. the value passed to this parameter (if any)
@@ -279,6 +288,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         "_per_message",
         "_per_user",
         "_persistent",
+        "_pre_fallbacks",
         "_states",
         "_timeout_jobs_lock",
         "timeout_jobs",
@@ -299,6 +309,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self,
         entry_points: List[BaseHandler[Update, CCT]],
         states: Dict[object, List[BaseHandler[Update, CCT]]],
+        pre_fallbacks: Optional[List[BaseHandler[Update, CCT]]] = None,
         fallbacks: Optional[List[BaseHandler[Update, CCT]]] = None,
         allow_reentry: bool = False,
         per_chat: bool = True,
@@ -318,6 +329,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             ShippingQueryHandler,
         )
 
+        if pre_fallbacks is None:
+            pre_fallbacks = []
+
         if fallbacks is None:
             fallbacks = []
 
@@ -328,6 +342,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self._block: DVType[bool] = block
 
         self._entry_points: List[BaseHandler[Update, CCT]] = entry_points
+        self._pre_fallbacks: List[BaseHandler[Update, CCT]] = pre_fallbacks
         self._states: Dict[object, List[BaseHandler[Update, CCT]]] = states
         self._fallbacks: List[BaseHandler[Update, CCT]] = fallbacks
 
@@ -363,6 +378,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             )
 
         all_handlers: List[BaseHandler[Update, CCT]] = []
+        all_handlers.extend(pre_fallbacks)
         all_handlers.extend(entry_points)
         all_handlers.extend(fallbacks)
 
@@ -424,8 +440,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
             elif self.per_message and not isinstance(handler, CallbackQueryHandler):
                 warn(
-                    "If 'per_message=True', all entry points, state handlers, and fallbacks"
-                    " must be 'CallbackQueryHandler', since no other handlers "
+                    "If 'per_message=True', all entry points, pre_fallbacks, state handlers"
+                    " and fallbacks must be 'CallbackQueryHandler', since no other handlers "
                     f"have a message context.{per_faq_link}",
                     stacklevel=2,
                 )
@@ -479,6 +495,19 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     def entry_points(self, _: object) -> NoReturn:
         raise AttributeError(
             "You can not assign a new value to entry_points after initialization."
+        )
+
+    @property
+    def pre_fallbacks(self) -> List[BaseHandler[Update, CCT]]:
+        """List[:class:`telegram.ext.BaseHandler`]: A list of handlers that will be
+        checked before checking the different states.
+        """
+        return self._pre_fallbacks
+
+    @pre_fallbacks.setter
+    def pre_fallbacks(self, _: object) -> NoReturn:
+        raise AttributeError(
+            "You can not assign a new value to pre_fallbacks after initialization."
         )
 
     @property
@@ -794,22 +823,32 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         # Get the handler list for current state, if we didn't find one yet and we're still here
         if state is not None and handler is None:
-            for candidate in self.states.get(state, []):
-                check = candidate.check_update(update)
+
+            # Find a pre_fallback handler
+            for pre_fallback in self.pre_fallbacks:
+                check = pre_fallback.check_update(update)
                 if check is not None and check is not False:
-                    handler = candidate
+                    handler = pre_fallback
                     break
 
-            # Find a fallback handler if all other handlers fail
+            # find a state handler
             else:
-                for fallback in self.fallbacks:
-                    check = fallback.check_update(update)
+                for candidate in self.states.get(state, []):
+                    check = candidate.check_update(update)
                     if check is not None and check is not False:
-                        handler = fallback
+                        handler = candidate
                         break
 
+                # Find a fallback handler if all other handlers fail
                 else:
-                    return None
+                    for fallback in self.fallbacks:
+                        check = fallback.check_update(update)
+                        if check is not None and check is not False:
+                            handler = fallback
+                            break
+
+                    else:
+                        return None
 
         return state, key, handler, check  # type: ignore[return-value]
 

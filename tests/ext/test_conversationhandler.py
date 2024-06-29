@@ -98,7 +98,7 @@ class TestConversationHandler:
     # At first we're holding the cup.  Then we sip coffee, and last we swallow it
     HOLDING, SIPPING, SWALLOWING, REPLENISHING, STOPPING = map(chr, range(ord("a"), ord("f")))
 
-    current_state, entry_points, states, fallbacks = None, None, None, None
+    current_state, entry_points, states, pre_fallbacks, fallbacks = None, None, None, None, None
     group = Chat(0, Chat.GROUP)
     second_group = Chat(1, Chat.GROUP)
 
@@ -126,6 +126,7 @@ class TestConversationHandler:
                 CommandHandler("drinkMore", self.drink),
             ],
         }
+        self.pre_fallbacks = [CommandHandler("fix_prod", self.start)]
         self.fallbacks = [CommandHandler("eat", self.start)]
         self.is_timeout = False
 
@@ -476,8 +477,8 @@ class TestConversationHandler:
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
         )
         assert str(recwarn[9].message) == (
-            "If 'per_message=True', all entry points, state handlers, and fallbacks must be "
-            "'CallbackQueryHandler', since no other handlers have a message context."
+            "If 'per_message=True', all entry points, pre_fallbacks, state handlers and fallbacks"
+            " must be 'CallbackQueryHandler', since no other handlers have a message context."
             + per_faq_link
         )
         assert str(recwarn[10].message) == (
@@ -537,7 +538,10 @@ class TestConversationHandler:
     @pytest.mark.parametrize("raise_ahs", [True, False])
     async def test_basic_and_app_handler_stop(self, app, bot, user1, user2, raise_ahs):
         handler = ConversationHandler(
-            entry_points=self.entry_points, states=self.states, fallbacks=self.fallbacks
+            entry_points=self.entry_points,
+            states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
 
@@ -597,7 +601,10 @@ class TestConversationHandler:
 
     async def test_conversation_handler_end(self, caplog, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=self.entry_points, states=self.states, fallbacks=self.fallbacks
+            entry_points=self.entry_points,
+            states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
 
@@ -639,7 +646,10 @@ class TestConversationHandler:
 
     async def test_conversation_handler_fallback(self, app, bot, user1, user2):
         handler = ConversationHandler(
-            entry_points=self.entry_points, states=self.states, fallbacks=self.fallbacks
+            entry_points=self.entry_points,
+            states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
 
@@ -679,6 +689,53 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.THIRSTY
 
+    async def test_conversation_handler_pre_fallback(self, app, bot, user1, user2):
+        handler = ConversationHandler(
+            entry_points=self.entry_points,
+            states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
+        )
+        app.add_handler(handler)
+
+        # first check if pre_fallback will not trigger start when not started
+        message = Message(
+            0,
+            None,
+            self.group,
+            from_user=user1,
+            text="/fix_prod",
+            entities=[
+                MessageEntity(type=MessageEntity.BOT_COMMAND, offset=0, length=len("/fix_prod"))
+            ],
+        )
+        message.set_bot(bot)
+        message._unfreeze()
+        message.entities[0]._unfreeze()
+
+        async with app:
+            await app.process_update(Update(update_id=0, message=message))
+            with pytest.raises(KeyError):
+                self.current_state[user1.id]
+
+            # User starts the state machine.
+            message.text = "/start"
+            message.entities[0].length = len("/start")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.current_state[user1.id] == self.THIRSTY
+
+            # The user is thirsty and wants to brew coffee.
+            message.text = "/brew"
+            message.entities[0].length = len("/brew")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.current_state[user1.id] == self.BREWING
+
+            # Now a pre_fallback command is issued
+            message.text = "/fix_prod"
+            message.entities[0].length = len("/fix_prod")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.current_state[user1.id] == self.THIRSTY
+
     async def test_unknown_state_warning(self, app, bot, user1, recwarn):
         def build_callback(state):
             async def callback(_, __):
@@ -692,6 +749,7 @@ class TestConversationHandler:
                 1: [TypeHandler(Update, build_callback(69))],
                 2: [TypeHandler(Update, build_callback(42))],
             },
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             name="xyz",
         )
@@ -731,6 +789,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             per_user=False,
         )
@@ -779,6 +838,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             per_chat=False,
         )
@@ -1060,6 +1120,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1117,6 +1178,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=100,
         )
@@ -1168,6 +1230,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", conv_entry)],
             states={1: [MessageHandler(filters.Text(["error"]), raise_error)]},
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             block=False,
         )
@@ -1220,6 +1283,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", raise_error, block=False)],
             states={},
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
@@ -1257,6 +1321,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1327,6 +1392,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
             block=False,
@@ -1369,6 +1435,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1463,6 +1530,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", start_callback)],
             states=states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1484,6 +1552,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1543,6 +1612,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1605,6 +1675,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1680,6 +1751,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1764,6 +1836,7 @@ class TestConversationHandler:
         handler = ConversationHandler(
             entry_points=self.entry_points,
             states=states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             conversation_timeout=0.5,
         )
@@ -1816,7 +1889,10 @@ class TestConversationHandler:
             )
         ]
         handler = ConversationHandler(
-            entry_points=self.entry_points, states=self.nested_states, fallbacks=self.fallbacks
+            entry_points=self.entry_points,
+            states=self.nested_states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
 
@@ -1940,7 +2016,10 @@ class TestConversationHandler:
             )
         ]
         handler = ConversationHandler(
-            entry_points=self.entry_points, states=self.nested_states, fallbacks=self.fallbacks
+            entry_points=self.entry_points,
+            states=self.nested_states,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
         )
 
         def test_callback(u, c):
@@ -2147,6 +2226,7 @@ class TestConversationHandler:
         conv_handler = ConversationHandler(
             entry_points=self.entry_points,
             states=self.states,
+            pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
             block=False,
         )
