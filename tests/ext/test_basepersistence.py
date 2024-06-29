@@ -1432,8 +1432,8 @@ class TestBasePersistence:
 
             await papp.update_persistence()
             assert papp.persistence.updated_conversations == {"conv_1": {(1, 1): 1}}
-            # This is the important part: the persistence is updated with `None` when the conv ends
-            assert papp.persistence.conversations == {"conv_1": {(1, 1): None}}
+            # This is the important part: the persistence is updated with `-1` when the conv ends
+            assert papp.persistence.conversations == {"conv_1": {(1, 1): HandlerStates.END}}
 
     async def test_non_blocking_conversation_ends(self, bot):
         papp = build_papp(token=bot.token, update_interval=100)
@@ -1476,8 +1476,8 @@ class TestBasePersistence:
             await papp.stop()
 
         async with papp:
-            # On the next restart/persistence loading the ConversationHandler should resolve
-            # the stored END state to None …
+            # On the next restart/persistence loading the ConversationHandler should keep
+            # the stored END state …
             assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
             # … and the update should be accepted by the entry point again
             assert conversation.check_update(
@@ -1485,7 +1485,7 @@ class TestBasePersistence:
             )
 
             await papp.update_persistence()
-            assert papp.persistence.conversations == {"conv": {(1, 1): None}}
+            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
 
     async def test_conversation_timeout(self, bot):
         # high update_interval so that we can instead manually call it
@@ -1524,9 +1524,9 @@ class TestBasePersistence:
                 TrackingConversationHandler.build_update(HandlerStates.END, 1)
             )
             await papp.update_persistence()
-            # … and persistence should be updated with `None`
+            # … and persistence should be updated with `-1`, the END state
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): None}}
+            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
 
             await papp.stop()
 
@@ -1612,7 +1612,7 @@ class TestBasePersistence:
             "child": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "grand_child": {(1, 1): None},
+            "grand_child": {(1, 1): HandlerStates.END},
             "child": {(1, 1): HandlerStates.STATE_2},
             "parent": {(1, 1): HandlerStates.STATE_1},
         }
@@ -1627,7 +1627,7 @@ class TestBasePersistence:
             "child": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "child": {(1, 1): None},
+            "child": {(1, 1): HandlerStates.END},
             "parent": {(1, 1): HandlerStates.STATE_2},
         }
 
@@ -1640,7 +1640,7 @@ class TestBasePersistence:
             "parent": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "parent": {(1, 1): None},
+            "parent": {(1, 1): HandlerStates.END},
         }
 
         await papp.shutdown()

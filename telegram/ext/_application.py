@@ -1728,7 +1728,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
 
         # Unfortunately due to circular imports this has to be here
         # pylint: disable=import-outside-toplevel
-        from telegram.ext._handlers.conversationhandler import PendingState
+        from telegram.ext._handlers.conversationhandler import ConversationHandler, PendingState
 
         for name, (key, new_state) in itertools.chain.from_iterable(
             zip(itertools.repeat(name), states_dict.pop_accessed_write_items())
@@ -1759,8 +1759,9 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
                     result = new_state.resolve()
             else:
                 result = new_state
-
-            effective_new_state = None if result is TrackingDict.DELETED else result
+            effective_new_state = (
+                ConversationHandler.END if result is TrackingDict.DELETED else result
+            )
             coroutines.add(
                 self.persistence.update_conversation(
                     name=name, key=key, new_state=effective_new_state
