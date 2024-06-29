@@ -382,8 +382,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         all_handlers.extend(entry_points)
         all_handlers.extend(fallbacks)
 
-        for state_handlers in states.values():
+        for key, state_handlers in states.items():
             all_handlers.extend(state_handlers)
+            if key == self.END:
+                warn(
+                    f"The END state ({key!r}) is reserved and shouldn't be used as a state name"
+                    f" in the `ConversationHandler`.",
+                    stacklevel=2,
+                )
 
         self._child_conversations.update(
             handler for handler in all_handlers if isinstance(handler, ConversationHandler)
