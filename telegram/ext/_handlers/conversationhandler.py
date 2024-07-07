@@ -19,6 +19,7 @@
 """This module contains the ConversationHandler."""
 import asyncio
 import datetime
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -168,6 +169,76 @@ class PendingState:
             return self.old_state
 
         return res
+
+
+class ConversationHandlerKey(ABC):
+
+    @abstractmethod
+    def from_update(self, update: object) -> ConversationKey:
+        """Returns the ConversationHandlerKey for the update.
+        If more than one key can be built for the update, the implementation may either choose
+        one or raise an exception. If the update is not supported, the implementation may return
+        NotImplemented in which case only handlers for the state FSMState.IDLE will be used.
+        """
+
+
+class ExampleConversationHandlerKey(ConversationHandlerKey):
+    per_chat: bool = True
+    per_user: bool = True
+    per_message: bool = False
+    user_id: Optional[int]
+    chat_id: Optional[int]
+
+    def __init__(self, per_chat: bool, per_user: bool, per_message: bool):
+        """
+        Initialize the ExampleConversationHandlerKey with the given parameters.
+
+        :param per_chat: bool - Whether the function is per chat.
+        :param per_user: bool - Whether the function is per user.
+        :param per_message: bool - Whether the function is per message.
+        """
+        self.per_chat = per_chat
+        self.per_user = per_user
+        self.per_message = per_message
+
+    def from_update(self, update: object) -> ConversationKey:
+        """
+        Builds the conversation key associated with the update.
+
+        Parameters:
+            update (object): The update object to build the conversation key for.
+
+        Returns:
+            ConversationKey: The conversation key associated with the update.
+        """
+        if not isinstance(update, Update):
+            return NotImplemented
+
+        # Builds the conversation key associated with the update.
+        chat = update.effective_chat
+        user = update.effective_user
+
+        key: List[Union[int, str]] = []
+
+        if self.per_chat:
+            if chat is None:
+                raise RuntimeError("Can't build key for update without effective chat!")
+            key.append(chat.id)
+
+        if self.per_user:
+            if user is None:
+                raise RuntimeError("Can't build key for update without effective user!")
+            key.append(user.id)
+
+        if self.per_message:
+            if update.callback_query is None:
+                raise RuntimeError("Can't build key for update without CallbackQuery!")
+            if update.callback_query.inline_message_id:
+                key.append(update.callback_query.inline_message_id)
+            else:
+                key.append(update.callback_query.message.message_id)  # type: ignore[union-attr]
+
+        return tuple(key)
 
 
 class ConversationHandler(BaseHandler[Update, CCT]):
@@ -354,6 +425,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         "_state_entry_handlers",
         "_states",
         "_timeout_jobs_lock",
+        "key_builder",
         "timeout_jobs",
     )
 
@@ -384,6 +456,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         persistent: bool = False,
         map_to_parent: Optional[Dict[object, object]] = None,
         block: DVType[bool] = DEFAULT_TRUE,
+        key_builder: Optional[ConversationHandlerKey] = None,
     ):
         # these imports need to be here because of circular import error otherwise
         from telegram.ext import (  # pylint: disable=import-outside-toplevel
@@ -401,6 +474,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         if state_entry_handlers is None:
             state_entry_handlers = {}
+
+        self.key_builder: ConversationHandlerKey = key_builder or ExampleConversationHandlerKey(
+            per_chat=per_chat, per_user=per_user, per_message=per_message
+        )
 
         # self.block is what the Application checks and we want it to always run CH in a blocking
         # way so that CH can take care of any non-blocking logic internally
@@ -774,33 +851,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         return out
 
-    def _get_key(self, update: Update) -> ConversationKey:
-        """Builds the conversation key associated with the update."""
-        chat = update.effective_chat
-        user = update.effective_user
-
-        key: List[Union[int, str]] = []
-
-        if self.per_chat:
-            if chat is None:
-                raise RuntimeError("Can't build key for update without effective chat!")
-            key.append(chat.id)
-
-        if self.per_user:
-            if user is None:
-                raise RuntimeError("Can't build key for update without effective user!")
-            key.append(user.id)
-
-        if self.per_message:
-            if update.callback_query is None:
-                raise RuntimeError("Can't build key for update without CallbackQuery!")
-            if update.callback_query.inline_message_id:
-                key.append(update.callback_query.inline_message_id)
-            else:
-                key.append(update.callback_query.message.message_id)  # type: ignore[union-attr]
-
-        return tuple(key)
-
     async def _schedule_job_delayed(
         self,
         new_state: asyncio.Task,
@@ -876,7 +926,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         if update.callback_query and self.per_chat and not update.callback_query.message:
             return None
 
-        key = self._get_key(update)
+        key = self.key_builder.from_update(update)
+        # todo think about what to do if key is NotImplemented
+
         state = self._conversations.get(key)
         check: Optional[object] = None
 
