@@ -81,10 +81,56 @@ class PendingState:
     It's still hidden from users, since this module itself is private.
     """
 
-    __slots__ = ("old_state", "task")
+    __slots__ = (
+        "application",
+        "block",
+        "context",
+        "conv_handler",
+        "handler",
+        "key",
+        "old_state",
+        "task",
+        "update",
+    )
 
     task: asyncio.Task
     old_state: object
+
+    def __init__(
+        self,
+        old_state: object,
+        task: asyncio.Task,
+        conv_handler: "ConversationHandler",
+        key: ConversationKey,
+        handler: Optional[BaseHandler],
+        update: Update,
+        context: CCT,
+        application: "Application",
+        block: DVType[bool],
+    ):
+        self.old_state = old_state
+        self.task = task
+        self.conv_handler = conv_handler
+        self.key = key
+        self.handler = handler
+        self.update = update
+        self.context = context
+        self.application = application
+        self.block = block
+
+        self.task.add_done_callback(lambda done: asyncio.create_task(self.await_new_state(done)))
+
+    async def await_new_state(self, _task: asyncio.Task) -> None:
+
+        await self.conv_handler._update_state(  # pylint: disable=protected-access
+            new_state=self.resolve(),
+            key=self.key,
+            update=self.update,
+            context=self.context,
+            block=self.block,
+            application=self.application,
+            handler=self.handler,
+        )
 
     def done(self) -> bool:
         return self.task.done()
@@ -93,7 +139,7 @@ class PendingState:
         """Returns the new state of the :class:`ConversationHandler` if available. If there was an
         exception during the task execution, then return the old state. If both the new and old
         state are :obj:`None`, return `CH.END`. If only the new state is :obj:`None`, return the
-        old state.
+        old state. Non-blocking entry-points with an exception will also return `CH.END`.
 
         Raises:
             :exc:`RuntimeError`: If the current task has not yet finished.
@@ -107,6 +153,11 @@ class PendingState:
                 "Task function raised exception. Falling back to old state %s",
                 self.old_state,
             )
+
+            # Special case if an error was raised in a non-blocking entry-point
+            if self.old_state is None and exc:
+                return ConversationHandler.END
+
             return self.old_state
 
         res = self.task.result()
@@ -155,14 +206,20 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     You could use this for a ``/help`` command, which won't be checked in the :attr:`states`
     collection.
 
-    The third collection, a :obj:`dict` named :attr:`states`, contains the different conversation
+    The third collection, a :obj:`dict` named :attr:`entry_state_handlers`, contains handlers,
+    which should be called on entering the corresponding states. These handlers will be called,
+    as soon as the state is entered. Here you can also define an entry_state_handler for
+    :attr:`TIMEOUT`, an entry_state_handler for :attr:`WAITING` and an entry_state_handler for
+    :attr:`END`.
+
+    The fourth collection, a :obj:`dict` named :attr:`states`, contains the different conversation
     steps and one or more associated handlers that should be used if the user sends a message when
     the conversation with them is currently in that state. Here you can also define a state for
     :attr:`TIMEOUT` to define the behavior when :attr:`conversation_timeout` is exceeded, and a
     state for :attr:`WAITING` to define behavior when a new update is received while the previous
     :attr:`block=False <block>` handler is not finished.
 
-    The fourth collection, a :obj:`list` named :attr:`fallbacks`, is used if the user is currently
+    The fifth collection, a :obj:`list` named :attr:`fallbacks`, is used if the user is currently
     in a conversation but the state has either no associated handler or the handler that is
     associated to the state is inappropriate for the update, for example if the update contains a
     command, but a regular text message is expected. You could use this for a ``/cancel`` command
@@ -206,10 +263,15 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             defines the different states of conversation a user can be in and one or more
             associated :obj:`BaseHandler` objects that should be used in that state. The first
             handler whose :meth:`check_update` method returns :obj:`True` will be used.
+        state_entry_handlers (Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]): A
+            :obj:`dict` that defines different :obj:`BaseHandler` objects that should be used by
+            entering the corresponding state. The first handler whose :meth:`check_update` method
+             returns :obj:`True` will be used. If all return :obj:`False`, the update is not
+             handled here.
         pre_fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             will be checked at first if the user is in a conversation. The first handler which
             :meth:`check_update` method returns :obj:`True` will be used. If all return
-            :obj:`False`, the update is not handled.
+            :obj:`False`, the update is not handled here.
         fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             might be used if the user is in a conversation, but every handler for their current
             state returned :obj:`False` on :meth:`check_update`. The first handler which
@@ -289,6 +351,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         "_per_user",
         "_persistent",
         "_pre_fallbacks",
+        "_state_entry_handlers",
         "_states",
         "_timeout_jobs_lock",
         "timeout_jobs",
@@ -309,6 +372,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self,
         entry_points: List[BaseHandler[Update, CCT]],
         states: Dict[object, List[BaseHandler[Update, CCT]]],
+        state_entry_handlers: Optional[Dict[object, List[BaseHandler[Update, CCT]]]] = None,
         pre_fallbacks: Optional[List[BaseHandler[Update, CCT]]] = None,
         fallbacks: Optional[List[BaseHandler[Update, CCT]]] = None,
         allow_reentry: bool = False,
@@ -335,6 +399,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         if fallbacks is None:
             fallbacks = []
 
+        if state_entry_handlers is None:
+            state_entry_handlers = {}
+
         # self.block is what the Application checks and we want it to always run CH in a blocking
         # way so that CH can take care of any non-blocking logic internally
         self.block: DVType[bool] = True
@@ -344,6 +411,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self._entry_points: List[BaseHandler[Update, CCT]] = entry_points
         self._pre_fallbacks: List[BaseHandler[Update, CCT]] = pre_fallbacks
         self._states: Dict[object, List[BaseHandler[Update, CCT]]] = states
+        self._state_entry_handlers: Dict[object, List[BaseHandler[Update, CCT]]] = (
+            state_entry_handlers
+        )
         self._fallbacks: List[BaseHandler[Update, CCT]] = fallbacks
 
         self._allow_reentry: bool = allow_reentry
@@ -390,6 +460,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     f" in the `ConversationHandler`.",
                     stacklevel=2,
                 )
+
+        for state_entry_handler in state_entry_handlers.values():
+            all_handlers.extend(state_entry_handler)
 
         self._child_conversations.update(
             handler for handler in all_handlers if isinstance(handler, ConversationHandler)
@@ -526,6 +599,19 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
     @states.setter
     def states(self, _: object) -> NoReturn:
+        raise AttributeError("You can not assign a new value to states after initialization.")
+
+    @property
+    def state_entry_handlers(self) -> Dict[object, List[BaseHandler[Update, CCT]]]:
+        """Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]: A :obj:`dict` that
+        defines different entry handlers for the different states of conversation a user can be
+        in and one or more associated :obj:`BaseHandler` objects that should be used in that
+        state.
+        """
+        return self._state_entry_handlers
+
+    @state_entry_handlers.setter
+    def state_entry_handlers(self, _: object) -> NoReturn:
         raise AttributeError("You can not assign a new value to states after initialization.")
 
     @property
@@ -668,7 +754,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         # run of Application.update_persistence
         for key, state in stored_data.items():
             if state == self.END:
-                self._update_state(new_state=self.END, key=key)
+                await self._update_state(
+                    new_state=self.END,
+                    key=key,
+                    update=None,  # type: ignore[arg-type]
+                    context=None,  # type: ignore[arg-type]
+                    block=True,
+                    application=application,
+                )
 
         out = {self.name: self._conversations}
 
@@ -787,29 +880,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         state = self._conversations.get(key)
         check: Optional[object] = None
 
-        # Resolve futures
         if isinstance(state, PendingState):
-            _LOGGER.debug("Waiting for asyncio Task to finish ...")
-
-            # check if future is finished or not
-            if state.done():
-                res = state.resolve()
-                # Special case if an error was raised in a non-blocking entry-point
-                if state.old_state is None and state.task.exception():
-                    self._conversations.pop(key, None)
-                    state = None
-                else:
-                    self._update_state(res, key)
-                    state = self._conversations.get(key)
-
-            # if not then handle WAITING state instead
-            else:
-                handlers = self.states.get(self.WAITING, [])
-                for handler_ in handlers:
-                    check = handler_.check_update(update)
-                    if check is not None and check is not False:
-                        return self.WAITING, key, handler_, check
-                return None
+            # handle WAITING state
+            handlers = self.states.get(self.WAITING, [])
+            for handler_ in handlers:
+                check = handler_.check_update(update)
+                if check is not None and check is not False:
+                    return self.WAITING, key, handler_, check
+            return None
 
         _LOGGER.debug("Selecting conversation %s with state %s", str(key), str(state))
 
@@ -916,6 +994,16 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         except ApplicationHandlerStop as exception:
             new_state = exception.state
             raise_dp_handler_stop = True
+
+        if isinstance(self.map_to_parent, dict) and new_state in self.map_to_parent:
+            await self._update_state(
+                self.END, conversation_key, update, context, block, application
+            )
+
+            if raise_dp_handler_stop:
+                raise ApplicationHandlerStop(self.map_to_parent.get(new_state))
+            return self.map_to_parent.get(new_state)
+
         async with self._timeout_jobs_lock:
             if self.conversation_timeout:
                 if application.job_queue is None:
@@ -942,14 +1030,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 else:
                     self._schedule_job(new_state, application, update, context, conversation_key)
 
-        if isinstance(self.map_to_parent, dict) and new_state in self.map_to_parent:
-            self._update_state(self.END, conversation_key, handler)
-            if raise_dp_handler_stop:
-                raise ApplicationHandlerStop(self.map_to_parent.get(new_state))
-            return self.map_to_parent.get(new_state)
-
         if current_state != self.WAITING:
-            self._update_state(new_state, conversation_key, handler)
+            await self._update_state(
+                new_state, conversation_key, update, context, block, application, handler
+            )
 
         if raise_dp_handler_stop:
             # Don't pass the new state here. If we're in a nested conversation, the parent is
@@ -958,18 +1042,43 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         # Signals a possible parent conversation to stay in the current state
         return None
 
-    def _update_state(
-        self, new_state: object, key: ConversationKey, handler: Optional[BaseHandler] = None
+    async def _update_state(
+        self,
+        new_state: object,
+        key: ConversationKey,
+        update: Update,
+        context: CCT,
+        block: DVType[bool],
+        application: "Application",
+        handler: Optional[BaseHandler] = None,
     ) -> None:
+
+        if isinstance(new_state, asyncio.Task):
+            self._conversations[key] = PendingState(
+                old_state=self._conversations.get(key),
+                task=new_state,
+                conv_handler=self,
+                key=key,
+                handler=handler,
+                update=update,
+                context=context,
+                application=application,
+                block=block,
+            )
+            return
+
+        await self._execute_state_entry_handlers(
+            new_state=new_state,
+            update=update,
+            context=context,
+            block=block,
+            application=application,
+        )
+
         if new_state == self.END:
             if key in self._conversations:
                 # If there is no key in conversations, nothing is done.
                 del self._conversations[key]
-
-        elif isinstance(new_state, asyncio.Task):
-            self._conversations[key] = PendingState(
-                old_state=self._conversations.get(key), task=new_state
-            )
 
         elif new_state is not None:
             if new_state not in self.states:
@@ -1003,7 +1112,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             del self.timeout_jobs[ctxt.conversation_key]
 
         # Now run all handlers which are in TIMEOUT state
-        handlers = self.states.get(self.TIMEOUT, [])
+        handlers = self.state_entry_handlers.get(self.TIMEOUT, [])
+        handlers.extend(self.states.get(self.TIMEOUT, []))
         for handler in handlers:
             check = handler.check_update(ctxt.update)
             if check is not None and check is not False:
@@ -1018,4 +1128,40 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                         stacklevel=2,
                     )
 
-        self._update_state(self.END, ctxt.conversation_key)
+        await self._update_state(
+            self.END, ctxt.conversation_key, ctxt.update, callback_context, True, ctxt.application
+        )
+
+    async def _execute_state_entry_handlers(
+        self,
+        new_state: object,
+        update: Update,
+        context: CCT,
+        block: DVType[bool],
+        application: "Application",
+    ) -> None:
+        state_entry_handlers = self.state_entry_handlers.get(new_state, [])
+        for state_entry_handler in state_entry_handlers:
+            check = state_entry_handler.check_update(update)
+            if check is not None and check is not False:
+                try:
+                    if block:
+
+                        await state_entry_handler.handle_update(
+                            update, application, check, context
+                        )
+
+                    else:
+                        application.create_task(
+                            coroutine=state_entry_handler.handle_update(
+                                update, application, check, context
+                            ),
+                            update=update,
+                            name=f"ConversationHandler:{update.update_id}:"
+                            "handle_update:non_blocking_cb",
+                        )
+                except ApplicationHandlerStop:
+                    warn(
+                        "ApplicationHandlerStop in State_entry_handlers has no effect. Ignoring.",
+                        stacklevel=2,
+                    )

@@ -325,7 +325,9 @@ class TestConversationHandler:
 
     async def test_check_update_returns_non(self, app, user1):
         """checks some cases where updates should not be handled"""
-        conv_handler = ConversationHandler([], {}, [], per_message=True, per_chat=True)
+        conv_handler = ConversationHandler(
+            entry_points=[], states={}, fallbacks=[], per_message=True, per_chat=True
+        )
         assert not conv_handler.check_update("not an Update")
         assert not conv_handler.check_update(Update(0))
         assert not conv_handler.check_update(
