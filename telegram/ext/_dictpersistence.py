@@ -22,7 +22,8 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from telegram.ext import BasePersistence, PersistenceInput
-from telegram.ext._utils.types import CDCData, ConversationDict, ConversationKey
+from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._utils.types import CDCData, ConversationDict
 
 if TYPE_CHECKING:
     from telegram._utils.types import JSONDict
@@ -294,21 +295,22 @@ class DictPersistence(BasePersistence[Dict[Any, Any], Dict[Any, Any], Dict[Any, 
             self._conversations = {}
         return self.conversations.get(name, {}).copy()  # type: ignore[union-attr]
 
-    async def update_conversation(
-        self, name: str, key: ConversationKey, new_state: Optional[object]
-    ) -> None:
+    async def update_conversation(self, name: str, conversation_data: ConversationData) -> None:
         """Will update the conversations for the given handler.
 
         Args:
             name (:obj:`str`): The handler's name.
-            key (:obj:`tuple`): The key the state is changed for.
-            new_state (:obj:`tuple` | :class:`object`): The new state for the given key.
+            conversation_data (:obj:`Persistence"ConversationData"`): The relevant data for
+            the conversations.
         """
         if not self._conversations:
             self._conversations = {}
-        if self._conversations.setdefault(name, {}).get(key) == new_state:
+        if (
+            self._conversations.setdefault(name, {}).get(conversation_data.key)
+            == conversation_data
+        ):
             return
-        self._conversations[name][key] = new_state
+        self._conversations[name][conversation_data.key] = conversation_data
         self._conversations_json = None
 
     async def update_user_data(self, user_id: int, data: Dict[Any, Any]) -> None:
@@ -431,10 +433,10 @@ class DictPersistence(BasePersistence[Dict[Any, Any], Dict[Any, Any], Dict[Any, 
             :obj:`str`: The JSON-serialized conversations dict
         """
         tmp: Dict[str, JSONDict] = {}
-        for handler, states in conversations.items():
+        for handler, conversation_datas in conversations.items():
             tmp[handler] = {}
-            for key, state in states.items():
-                tmp[handler][json.dumps(key)] = state
+            for key, conversation_data in conversation_datas.items():
+                tmp[handler][json.dumps(key)] = conversation_data.to_dict()
         return json.dumps(tmp)
 
     @staticmethod
@@ -450,10 +452,19 @@ class DictPersistence(BasePersistence[Dict[Any, Any], Dict[Any, Any], Dict[Any, 
         """
         tmp = json.loads(json_string)
         conversations: Dict[str, ConversationDict] = {}
-        for handler, states in tmp.items():
+        for handler, persistence_data in tmp.items():
             conversations[handler] = {}
-            for key, state in states.items():
-                conversations[handler][tuple(json.loads(key))] = state
+            for key, conv_data in persistence_data.items():
+                if isinstance(conv_data, int) or conv_data is None:
+                    # FOR BACKWARD COMPATIBILITY. ConversationHandler will transform it
+                    conversations[handler][tuple(json.loads(key))] = conv_data  # type: ignore
+                else:
+                    conversations[handler][tuple(json.loads(key))] = ConversationData(
+                        tuple(json.loads(conv_data["key"])),
+                        conv_data["state"],
+                        conv_data["timeout"],
+                        conv_data["update"],
+                    )
         return conversations
 
     @staticmethod

@@ -21,6 +21,7 @@ import json
 import pytest
 
 from telegram.ext import DictPersistence
+from telegram.ext._handlers.conversationhandler import ConversationData
 from tests.auxil.slots import mro_slots
 
 
@@ -53,10 +54,16 @@ def callback_data():
 
 @pytest.fixture()
 def conversations():
+    name_1_1 = ConversationData(key=(123, 123), state=3, timeout=None, update=None)
+    name_1_2 = ConversationData(key=(456, 654), state=4, timeout=None, update=None)
+    name_2_1 = ConversationData(key=(123, 321), state=1, timeout=None, update=None)
+    name_2_2 = ConversationData(key=(890, 890), state=2, timeout=None, update=None)
+    name_3_1 = ConversationData(key=(123, 321), state=1, timeout=None, update=None)
+    name_3_2 = ConversationData(key=(890, 890), state=2, timeout=None, update=None)
     return {
-        "name1": {(123, 123): 3, (456, 654): 4},
-        "name2": {(123, 321): 1, (890, 890): 2},
-        "name3": {(123, 321): 1, (890, 890): 2},
+        "name1": {(123, 123): name_1_1, (456, 654): name_1_2},
+        "name2": {(123, 321): name_2_1, (890, 890): name_2_2},
+        "name3": {(123, 321): name_3_1, (890, 890): name_3_2},
     }
 
 
@@ -82,9 +89,13 @@ def callback_data_json(callback_data):
 
 @pytest.fixture()
 def conversations_json(conversations):
-    return """{"name1": {"[123, 123]": 3, "[456, 654]": 4}, "name2":
-              {"[123, 321]": 1, "[890, 890]": 2}, "name3":
-              {"[123, 321]": 1, "[890, 890]": 2}}"""
+    return """{"name1": {"[123, 123]": {"key": "[123, 123]", "state": 3, "timeout": null,
+              "update": null}, "[456, 654]": {"key": "[456, 654]", "state": 4, "timeout":
+              null, "update": null}}, "name2": {"[123, 321]": {"key": "[123, 321]", "state":
+              1, "timeout": null, "update": null}, "[890, 890]": {"key": "[890, 890]",
+              "state": 2, "timeout": null, "update": null}}, "name3": {"[123, 321]": {"key":
+              "[123, 321]", "state": 1, "timeout": null, "update": null}, "[890, 890]": {"key":
+              "[890, 890]", "state": 2, "timeout": null, "update": null}}}"""
 
 
 class TestDictPersistence:
@@ -184,14 +195,18 @@ class TestDictPersistence:
 
         conversation1 = await dict_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        conv_data = ConversationData((123, 123), 3, None, None)
+        assert conversation1[(123, 123)] == conv_data
+        conv_data = ConversationData((456, 654), 4, None, None)
+        assert conversation1[(456, 654)] == conv_data
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await dict_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        conv_data = ConversationData((123, 321), 1, None, None)
+        assert conversation2[(123, 321)] == conv_data
+        conv_data = ConversationData((890, 890), 2, None, None)
+        assert conversation2[(890, 890)] == conv_data
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -302,11 +317,11 @@ class TestDictPersistence:
         assert dict_persistence.callback_data_json == json.dumps(callback_data)
 
         conversation1 = await dict_persistence.get_conversations("name1")
-        conversation1[(123, 123)] = 5
+        conversation1[(123, 123)] = ConversationData((123, 123), 5)
         assert dict_persistence.conversations["name1"] != conversation1
-        await dict_persistence.update_conversation("name1", (123, 123), 5)
+        await dict_persistence.update_conversation("name1", ConversationData((123, 123), 5))
         assert dict_persistence.conversations["name1"] == conversation1
-        conversations["name1"][(123, 123)] = 5
+        conversations["name1"][(123, 123)] = ConversationData((123, 123), 5)
         assert (
             dict_persistence.conversations_json
             == DictPersistence._encode_conversations_to_json(conversations)
@@ -314,12 +329,18 @@ class TestDictPersistence:
         assert await dict_persistence.get_conversations("name1") == conversation1
 
         dict_persistence._conversations = None
-        await dict_persistence.update_conversation("name1", (123, 123), 5)
-        assert dict_persistence.conversations["name1"] == {(123, 123): 5}
-        assert await dict_persistence.get_conversations("name1") == {(123, 123): 5}
+        await dict_persistence.update_conversation("name1", ConversationData((123, 123), 5))
+        assert dict_persistence.conversations["name1"] == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
+        assert await dict_persistence.get_conversations("name1") == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
         assert (
             dict_persistence.conversations_json
-            == DictPersistence._encode_conversations_to_json({"name1": {(123, 123): 5}})
+            == DictPersistence._encode_conversations_to_json(
+                {"name1": {(123, 123): ConversationData((123, 123), 5)}}
+            )
         )
 
     async def test_no_data_on_init(
@@ -341,13 +362,15 @@ class TestDictPersistence:
         await dict_persistence.update_bot_data(bot_data)
         await dict_persistence.update_user_data(12345, user_data[12345])
         await dict_persistence.update_chat_data(-12345, chat_data[-12345])
-        await dict_persistence.update_conversation("name", (1, 1), "new_state")
+        await dict_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         await dict_persistence.update_callback_data(callback_data)
 
         assert dict_persistence.user_data[12345] == user_data[12345]
         assert dict_persistence.chat_data[-12345] == chat_data[-12345]
         assert dict_persistence.bot_data == bot_data
-        assert dict_persistence.conversations["name"] == {(1, 1): "new_state"}
+        assert dict_persistence.conversations["name"] == {
+            (1, 1): ConversationData((1, 1), "new_state")
+        }
         assert dict_persistence.callback_data == callback_data
 
     async def test_no_json_dumping_if_data_did_not_change(
@@ -358,7 +381,7 @@ class TestDictPersistence:
         await dict_persistence.update_bot_data(bot_data)
         await dict_persistence.update_user_data(12345, user_data[12345])
         await dict_persistence.update_chat_data(-12345, chat_data[-12345])
-        await dict_persistence.update_conversation("name", (1, 1), "new_state")
+        await dict_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         await dict_persistence.update_callback_data(callback_data)
 
         assert dict_persistence.user_data_json == json.dumps({12345: user_data[12345]})
@@ -366,7 +389,9 @@ class TestDictPersistence:
         assert dict_persistence.bot_data_json == json.dumps(bot_data)
         assert (
             dict_persistence.conversations_json
-            == DictPersistence._encode_conversations_to_json({"name": {(1, 1): "new_state"}})
+            == DictPersistence._encode_conversations_to_json(
+                {"name": {(1, 1): ConversationData((1, 1), "new_state")}}
+            )
         )
         assert dict_persistence.callback_data_json == json.dumps(callback_data)
 
@@ -382,7 +407,7 @@ class TestDictPersistence:
         await dict_persistence.update_bot_data(bot_data)
         await dict_persistence.update_user_data(12345, user_data[12345])
         await dict_persistence.update_chat_data(-12345, chat_data[-12345])
-        await dict_persistence.update_conversation("name", (1, 1), "new_state")
+        await dict_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         await dict_persistence.update_callback_data(callback_data)
 
         assert not flag

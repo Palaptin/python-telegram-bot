@@ -43,6 +43,7 @@ from telegram.ext import (
     PersistenceInput,
     filters,
 )
+from telegram.ext._handlers.conversationhandler import ConversationData
 from telegram.warnings import PTBUserWarning
 from tests.auxil.build_messages import make_message_update
 from tests.auxil.pytest_classes import PytestApplication, make_bot
@@ -108,10 +109,19 @@ class TrackingPersistence(BasePersistence):
         self.user_data[1]["key"] = "value"
         self.user_data[2]["foo"] = "bar"
         self.bot_data["key"] = "value"
-        self.conversations["conv_1"][(1, 1)] = HandlerStates.STATE_1
-        self.conversations["conv_1"][(2, 2)] = HandlerStates.STATE_2
-        self.conversations["conv_2"][(3, 3)] = HandlerStates.STATE_3
-        self.conversations["conv_2"][(4, 4)] = HandlerStates.STATE_4
+        self.conversations["conv_1"][(1, 1)] = ConversationData(
+            key=(1, 1), state=HandlerStates.STATE_1
+        )
+
+        self.conversations["conv_1"][(2, 2)] = ConversationData(
+            key=(2, 2), state=HandlerStates.STATE_2
+        )
+        self.conversations["conv_2"][(3, 3)] = ConversationData(
+            key=(3, 3), state=HandlerStates.STATE_3
+        )
+        self.conversations["conv_2"][(4, 4)] = ConversationData(
+            key=(4, 4), state=HandlerStates.STATE_4
+        )
         self.callback_data = self.CALLBACK_DATA
 
     def reset_tracking(self):
@@ -145,9 +155,9 @@ class TrackingPersistence(BasePersistence):
         self.updated_user_ids[user_id] += 1
         self.user_data[user_id] = data
 
-    async def update_conversation(self, name: str, key, new_state):
-        self.updated_conversations[name][key] += 1
-        self.conversations[name][key] = new_state
+    async def update_conversation(self, name: str, conversation_data):
+        self.updated_conversations[name][conversation_data.key] += 1
+        self.conversations[name][conversation_data.key] = conversation_data
 
     async def update_callback_data(self, data):
         self.updated_callback_data = True
@@ -1234,7 +1244,7 @@ class TestBasePersistence:
             entry_points=[
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
-            states={},
+            states={HandlerStates.STATE_1: []},
             persistent=True,
             name="conv",
             block=False,
@@ -1255,7 +1265,9 @@ class TestBasePersistence:
                 await asyncio.sleep(0.01)
                 # Conversation should have been updated with the current state, i.e. None
                 assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-                assert papp.persistence.conversations == {"conv": {(1, 1): None}}
+                assert papp.persistence.conversations == {
+                    "conv": {(1, 1): ConversationData((1, 1), None)}
+                }
 
             # Ensure that we warn the user about this!
             found_record = None
@@ -1283,7 +1295,9 @@ class TestBasePersistence:
                 for record in caplog.records
             )
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.STATE_1}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_1)}
+            }
 
             await papp.stop()
 
@@ -1326,7 +1340,9 @@ class TestBasePersistence:
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
             # The result of the pending state wasn't retrieved by the CH yet, so we must be in
             # state `None`
-            assert papp.persistence.conversations == {"conv": {(1, 1): None}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), None)}
+            }
 
             await papp.process_update(
                 TrackingConversationHandler.build_update(HandlerStates.STATE_1, 1)
@@ -1337,7 +1353,9 @@ class TestBasePersistence:
             await papp.update_persistence()
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
             # since the second callback raised an exception, the state must be the previous one!
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.STATE_1}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_1)}
+            }
 
     async def test_non_blocking_conversations_on_stop(self, bot):
         papp = build_papp(token=bot.token, update_interval=100)
@@ -1351,7 +1369,7 @@ class TestBasePersistence:
             entry_points=[
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
             ],
-            states={},
+            states={HandlerStates.STATE_1: []},
             persistent=True,
             name="conv",
             block=False,
@@ -1376,7 +1394,9 @@ class TestBasePersistence:
         await asyncio.sleep(0.01)
         # The pending state must have been resolved on shutdown!
         assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-        assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.STATE_1}}
+        assert papp.persistence.conversations == {
+            "conv": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_1)}
+        }
 
     async def test_non_blocking_conversations_on_improper_stop(self, bot, caplog):
         papp = build_papp(token=bot.token, update_interval=100)
@@ -1409,7 +1429,9 @@ class TestBasePersistence:
             # Because the app wasn't running, the pending state isn't ensured to be done on
             # shutdown - hence we expect the persistence to be updated with state `None`
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): None}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), None)}
+            }
 
         # Ensure that we warn the user about this!
         found_record = None
@@ -1433,7 +1455,9 @@ class TestBasePersistence:
             await papp.update_persistence()
             assert papp.persistence.updated_conversations == {"conv_1": {(1, 1): 1}}
             # This is the important part: the persistence is updated with `-1` when the conv ends
-            assert papp.persistence.conversations == {"conv_1": {(1, 1): HandlerStates.END}}
+            assert papp.persistence.conversations == {
+                "conv_1": {(1, 1): ConversationData((1, 1), HandlerStates.END)}
+            }
 
     async def test_non_blocking_conversation_ends(self, bot):
         papp = build_papp(token=bot.token, update_interval=100)
@@ -1471,21 +1495,27 @@ class TestBasePersistence:
             # On shutdown, persisted data should include the END state b/c that's what the
             # pending state is being resolved to
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.END)}
+            }
 
             await papp.stop()
 
         async with papp:
             # On the next restart/persistence loading the ConversationHandler should keep
             # the stored END state …
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.END)}
+            }
             # … and the update should be accepted by the entry point again
             assert conversation.check_update(
                 TrackingConversationHandler.build_update(HandlerStates.END, 1)
             )
 
             await papp.update_persistence()
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.END)}
+            }
 
     async def test_conversation_timeout(self, bot):
         # high update_interval so that we can instead manually call it
@@ -1515,8 +1545,11 @@ class TestBasePersistence:
             assert papp.persistence.updated_conversations == {}
             await papp.update_persistence()
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.STATE_1}}
-
+            data = papp.persistence.conversations["conv"][(1, 1)]
+            assert data.state == HandlerStates.STATE_1
+            assert data.key == (1, 1)
+            assert data.timeout is not None
+            assert data.json_update is not None
             papp.persistence.reset_tracking()
             await asyncio.sleep(4)
             # After the timeout the conversation should run the entry point again …
@@ -1526,7 +1559,9 @@ class TestBasePersistence:
             await papp.update_persistence()
             # … and persistence should be updated with `-1`, the END state
             assert papp.persistence.updated_conversations == {"conv": {(1, 1): 1}}
-            assert papp.persistence.conversations == {"conv": {(1, 1): HandlerStates.END}}
+            assert papp.persistence.conversations == {
+                "conv": {(1, 1): ConversationData((1, 1), HandlerStates.END)}
+            }
 
             await papp.stop()
 
@@ -1583,9 +1618,15 @@ class TestBasePersistence:
         )
 
         papp.add_handler(parent)
-        papp.persistence.conversations["grand_child"][(1, 1)] = HandlerStates.STATE_1
-        papp.persistence.conversations["child"][(1, 1)] = HandlerStates.STATE_1
-        papp.persistence.conversations["parent"][(1, 1)] = HandlerStates.STATE_1
+        papp.persistence.conversations["grand_child"][(1, 1)] = ConversationData(
+            (1, 1), HandlerStates.STATE_1
+        )
+        papp.persistence.conversations["child"][(1, 1)] = ConversationData(
+            (1, 1), HandlerStates.STATE_1
+        )
+        papp.persistence.conversations["parent"][(1, 1)] = ConversationData(
+            (1, 1), HandlerStates.STATE_1
+        )
 
         # Should load the stored data into the persistence so that the updates below are handled
         # accordingly
@@ -1612,9 +1653,9 @@ class TestBasePersistence:
             "child": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "grand_child": {(1, 1): HandlerStates.END},
-            "child": {(1, 1): HandlerStates.STATE_2},
-            "parent": {(1, 1): HandlerStates.STATE_1},
+            "grand_child": {(1, 1): ConversationData((1, 1), HandlerStates.END)},
+            "child": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_2)},
+            "parent": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_1)},
         }
 
         papp.persistence.reset_tracking()
@@ -1627,8 +1668,8 @@ class TestBasePersistence:
             "child": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "child": {(1, 1): HandlerStates.END},
-            "parent": {(1, 1): HandlerStates.STATE_2},
+            "child": {(1, 1): ConversationData((1, 1), HandlerStates.END)},
+            "parent": {(1, 1): ConversationData((1, 1), HandlerStates.STATE_2)},
         }
 
         papp.persistence.reset_tracking()
@@ -1640,7 +1681,7 @@ class TestBasePersistence:
             "parent": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
-            "parent": {(1, 1): HandlerStates.END},
+            "parent": {(1, 1): ConversationData((1, 1), HandlerStates.END)},
         }
 
         await papp.shutdown()

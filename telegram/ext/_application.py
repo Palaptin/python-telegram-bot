@@ -81,6 +81,7 @@ if TYPE_CHECKING:
     from telegram.ext import ConversationHandler, JobQueue
     from telegram.ext._applicationbuilder import InitApplicationBuilder
     from telegram.ext._baseupdateprocessor import BaseUpdateProcessor
+    from telegram.ext._handlers.conversationhandler import ConversationData
     from telegram.ext._jobqueue import Job
 
 DEFAULT_GROUP: int = 0
@@ -358,7 +359,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
         # This attribute will hold references to the conversation dicts of all conversation
         # handlers so that we can extract the changed states during `update_persistence`
         self._conversation_handler_conversations: Dict[
-            str, TrackingDict[ConversationKey, object]
+            str, TrackingDict[ConversationKey, "ConversationData"]
         ] = {}
 
         # A number of low-level helpers for the internal logic
@@ -1730,17 +1731,24 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
         # pylint: disable=import-outside-toplevel
         from telegram.ext._handlers.conversationhandler import ConversationHandler, PendingState
 
-        for name, (key, new_state) in itertools.chain.from_iterable(
+        for name, (key, real_conversation_data) in itertools.chain.from_iterable(
             zip(itertools.repeat(name), states_dict.pop_accessed_write_items())
             for name, states_dict in self._conversation_handler_conversations.items()
         ):
-            if isinstance(new_state, PendingState):
-                # If the handler was running non-blocking, we check if the new state is already
-                # available. Otherwise, we update with the old state, which is the next best
-                # guess.
-                # Note that when updating the persistence one last time during self.stop(),
-                # *all* tasks will be done.
-                if not new_state.done():
+            if real_conversation_data is TrackingDict.DELETED:
+                from telegram.ext._handlers.conversationhandler import ConversationData
+
+                conversation_data = ConversationData(
+                    key=key,
+                    state=ConversationHandler.END,
+                )
+            else:
+                conversation_data = real_conversation_data.copy()
+                if isinstance(conversation_data.state, PendingState):
+                    # If the handler is currently running, we update with the old state. This will
+                    # only happen with non-blocking handlers.
+                    # Note that when updating the persistence one last time during self.stop(),
+                    # *all* tasks will be done.
                     if self.running:
                         _LOGGER.debug(
                             "A ConversationHandlers state was not yet resolved. Updating the "
@@ -1752,19 +1760,13 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
                             "A ConversationHandlers state was not yet resolved. Updating the "
                             "persistence with the current state."
                         )
-                    result = new_state.old_state
+                    conversation_data.state = conversation_data.state.old_state
                     # We need to check again on the next run if the state is done
                     self._conversation_handler_conversations[name].mark_as_accessed(key)
-                else:
-                    result = new_state.resolve()
-            else:
-                result = new_state
-            effective_new_state = (
-                ConversationHandler.END if result is TrackingDict.DELETED else result
-            )
             coroutines.add(
                 self.persistence.update_conversation(
-                    name=name, key=key, new_state=effective_new_state
+                    name=name,
+                    conversation_data=conversation_data,
                 )
             )
 

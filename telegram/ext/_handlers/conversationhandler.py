@@ -19,6 +19,7 @@
 """This module contains the ConversationHandler."""
 import asyncio
 import datetime
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
@@ -36,7 +37,7 @@ from typing import (
     cast,
 )
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram._utils.defaultvalue import DEFAULT_TRUE, DefaultValue
 from telegram._utils.logging import get_logger
 from telegram._utils.repr import build_repr_with_selected_attrs
@@ -76,6 +77,46 @@ class _ConversationTimeoutContext(Generic[CCT]):
 
 
 @dataclass
+class ConversationData:
+
+    key: ConversationKey
+    state: object
+    timeout: Optional[Union[float, datetime.timedelta]]
+    json_update: str
+
+    def __init__(
+        self,
+        key: ConversationKey,
+        state: object,
+        timeout: Optional[Union[float, datetime.timedelta]] = None,
+        update: Optional[Update] = None,
+    ):
+        self.key = key
+        self.state = state
+        self.timeout = timeout
+        self.set_update(update)
+
+    def set_update(self, update: Optional[Update]) -> None:
+        self.json_update = update.to_json() if update is not None else ""
+
+    def update_as_object(self, bot: Bot) -> Optional[Update]:
+        return Update.de_json(json.loads(self.json_update), bot) if self.json_update else None
+
+    def copy(self) -> "ConversationData":
+        copy = ConversationData(self.key, self.state, self.timeout)
+        copy.json_update = self.json_update
+        return copy
+
+    def to_dict(self) -> dict:
+        return {
+            "key": self.key,
+            "state": self.state,
+            "timeout": self.timeout,
+            "update": self.json_update if self.json_update != "" else None,
+        }
+
+
+@dataclass
 class PendingState:
     """Thin wrapper around :class:`asyncio.Task` to handle block=False handlers. Note that this is
     a public class of this module, since :meth:`Application.update_persistence` needs to access it.
@@ -87,8 +128,8 @@ class PendingState:
         "block",
         "context",
         "conv_handler",
+        "conversation_data",
         "handler",
-        "key",
         "old_state",
         "task",
         "update",
@@ -102,7 +143,7 @@ class PendingState:
         old_state: object,
         task: asyncio.Task,
         conv_handler: "ConversationHandler",
-        key: ConversationKey,
+        conversation_data: ConversationData,
         handler: Optional[BaseHandler],
         update: Update,
         context: CCT,
@@ -112,7 +153,7 @@ class PendingState:
         self.old_state = old_state
         self.task = task
         self.conv_handler = conv_handler
-        self.key = key
+        self.conversation_data = conversation_data
         self.handler = handler
         self.update = update
         self.context = context
@@ -125,7 +166,7 @@ class PendingState:
 
         await self.conv_handler._update_state(  # pylint: disable=protected-access
             new_state=self.resolve(),
-            key=self.key,
+            conversation_data=self.conversation_data,
             update=self.update,
             context=self.context,
             block=self.block,
@@ -794,7 +835,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
     async def _initialize_persistence(
         self, application: "Application"
-    ) -> Dict[str, TrackingDict[ConversationKey, object]]:
+    ) -> Dict[str, TrackingDict[ConversationKey, ConversationData]]:
         """Initializes the persistence for this handler and its child conversations.
         While this method is marked as protected, we expect it to be called by the
         Application/parent conversations. It's just protected to hide it from users.
@@ -815,7 +856,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         current_conversations = self._conversations
         self._conversations = cast(
-            TrackingDict[ConversationKey, object],
+            TrackingDict[ConversationKey, ConversationData],
             TrackingDict(),
         )
         # In the conversation already processed updates
@@ -823,24 +864,25 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         # above might be partly overridden but that's okay since we warn about that in
         # add_handler
         stored_data = await application.persistence.get_conversations(self.name)
+        # Since CH.END is stored as normal state, we need to properly parse it here in order to
+        # don't add it to the _conversations dict
+        # FOR BACKWARD COMPATIBILITY
+        for key, conversation_data in stored_data.items():
+            if not isinstance(conversation_data, ConversationData):
+                warn(
+                    f"Loaded persistent conversation with key `{key}` is not from type "
+                    "`ConversationData`.Trying to convert it to one. You can ignore this warning"
+                    "if no further errors occur",
+                    stacklevel=1,
+                )
+                stored_data[key] = ConversationData(key=key, state=conversation_data)
+        # FOR BACKWARD COMPATIBILITY
+        stored_data = {key: val for key, val in stored_data.items() if val.state != self.END}
         self._conversations.update_no_track(stored_data)
 
-        # Since CH.END is stored as normal state, we need to properly parse it here in order to
-        # actually end the conversation, i.e. delete the key from the _conversations dict
-        # This also makes sure that these entries are deleted from the persisted data on the next
-        # run of Application.update_persistence
-        for key, state in stored_data.items():
-            if state == self.END:
-                await self._update_state(
-                    new_state=self.END,
-                    key=key,
-                    update=None,  # type: ignore[arg-type]
-                    context=None,  # type: ignore[arg-type]
-                    block=True,
-                    application=application,
-                )
-
         out = {self.name: self._conversations}
+
+        await self._restore_timeout_jobs(application, stored_data)
 
         for handler in self._child_conversations:
             out.update(
@@ -858,6 +900,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         update: Update,
         context: CCT,
         conversation_key: ConversationKey,
+        current_conversation: ConversationData,
     ) -> None:
         try:
             effective_new_state = await new_state
@@ -874,6 +917,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             update=update,
             context=context,
             conversation_key=conversation_key,
+            current_conversation=current_conversation,
         )
 
     def _schedule_job(
@@ -883,19 +927,35 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         update: Update,
         context: CCT,
         conversation_key: ConversationKey,
+        current_conversation: ConversationData,
+        conversation_timeout: Optional[Union[float, datetime.timedelta]] = None,
+        timeout_job_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Schedules a job which executes :meth:`_trigger_timeout` upon conversation timeout."""
         if new_state == self.END:
             return
 
+        timeout = conversation_timeout or self.conversation_timeout
+        if timeout is None:
+            return
+
         try:
-            # both job_queue & conversation_timeout are checked before calling _schedule_job
+            # job_queue is checked before calling _schedule_job
             j_queue = application.job_queue
-            self.timeout_jobs[conversation_key] = j_queue.run_once(  # type: ignore[union-attr]
-                self._trigger_timeout,
-                self.conversation_timeout,  # type: ignore[arg-type]
+            t_job = j_queue.run_once(  # type: ignore[union-attr]
+                callback=self._trigger_timeout,
+                when=timeout,
                 data=_ConversationTimeoutContext(conversation_key, update, application, context),
+                job_kwargs=timeout_job_kwargs,
             )
+            self.timeout_jobs[conversation_key] = t_job
+            current_conversation.set_update(update)
+            if t_job.job.pending:
+                # job don't know the next run time on application startup.
+                current_conversation.timeout = timeout
+            else:
+                current_conversation.timeout = t_job.job.next_run_time
+
         except Exception as exc:
             _LOGGER.exception("Failed to schedule timeout.", exc_info=exc)
 
@@ -929,7 +989,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         key = self.key_builder.from_update(update)
         # todo think about what to do if key is NotImplemented
 
-        state = self._conversations.get(key)
+        conversation_data = self._conversations.get(key)
+        state = conversation_data.state if conversation_data is not None else None
         check: Optional[object] = None
 
         if isinstance(state, PendingState):
@@ -1010,12 +1071,28 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         current_state, conversation_key, handler, handler_check_result = check_result
         raise_dp_handler_stop = False
 
+        if conversation_key in self._conversations:
+            current_conversation = self._conversations[conversation_key]
+        else:
+            # Create a new one
+            current_conversation = ConversationData(
+                key=conversation_key,
+                state=None,
+                update=None,
+                timeout=None,
+            )
+            self._conversations[conversation_key] = current_conversation
+
         async with self._timeout_jobs_lock:
             # Remove the old timeout job (if present)
             timeout_job = self.timeout_jobs.pop(conversation_key, None)
 
             if timeout_job is not None:
                 timeout_job.schedule_removal()
+            current_conversation.timeout = None
+            current_conversation.set_update(None)
+
+        # await self._ensure_conversation_data(application, conversation_key, current_state)
 
         # Resolution order of "block":
         # 1. Setting of the selected handler
@@ -1049,15 +1126,20 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         if isinstance(self.map_to_parent, dict) and new_state in self.map_to_parent:
             await self._update_state(
-                self.END, conversation_key, update, context, block, application
+                new_state=self.END,
+                conversation_data=current_conversation,
+                update=update,
+                context=context,
+                block=block,
+                application=application,
             )
 
             if raise_dp_handler_stop:
                 raise ApplicationHandlerStop(self.map_to_parent.get(new_state))
             return self.map_to_parent.get(new_state)
 
-        async with self._timeout_jobs_lock:
-            if self.conversation_timeout:
+        if self.conversation_timeout:
+            async with self._timeout_jobs_lock:
                 if application.job_queue is None:
                     warn(
                         "Ignoring `conversation_timeout` because the Application has no JobQueue.",
@@ -1074,17 +1156,35 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     # checking if the new state is self.END is done in _schedule_job
                     application.create_task(
                         self._schedule_job_delayed(
-                            new_state, application, update, context, conversation_key
+                            new_state=new_state,
+                            application=application,
+                            update=update,
+                            context=context,
+                            conversation_key=conversation_key,
+                            current_conversation=current_conversation,
                         ),
                         update=update,
                         name=f"ConversationHandler:{update.update_id}:handle_update:timeout_job",
                     )
                 else:
-                    self._schedule_job(new_state, application, update, context, conversation_key)
+                    self._schedule_job(
+                        new_state=new_state,
+                        application=application,
+                        update=update,
+                        context=context,
+                        conversation_key=conversation_key,
+                        current_conversation=current_conversation,
+                    )
 
         if current_state != self.WAITING:
             await self._update_state(
-                new_state, conversation_key, update, context, block, application, handler
+                new_state=new_state,
+                conversation_data=current_conversation,
+                update=update,
+                context=context,
+                block=block,
+                application=application,
+                handler=handler,
             )
 
         if raise_dp_handler_stop:
@@ -1097,27 +1197,28 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     async def _update_state(
         self,
         new_state: object,
-        key: ConversationKey,
+        conversation_data: ConversationData,
         update: Update,
         context: CCT,
         block: DVType[bool],
         application: "Application",
         handler: Optional[BaseHandler] = None,
     ) -> None:
-
         if isinstance(new_state, asyncio.Task):
-            self._conversations[key] = PendingState(
-                old_state=self._conversations.get(key),
+            conversation_data.state = PendingState(
+                conversation_data=conversation_data,
+                old_state=conversation_data.state,
                 task=new_state,
                 conv_handler=self,
-                key=key,
                 handler=handler,
                 update=update,
                 context=context,
                 application=application,
                 block=block,
             )
+            self._conversations[conversation_data.key] = conversation_data
             return
+            # we will come back once the state is resolved
 
         await self._execute_state_entry_handlers(
             new_state=new_state,
@@ -1128,9 +1229,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         )
 
         if new_state == self.END:
-            if key in self._conversations:
+            if conversation_data.key in self._conversations:
                 # If there is no key in conversations, nothing is done.
-                del self._conversations[key]
+                del self._conversations[conversation_data.key]
 
         elif new_state is not None:
             if new_state not in self.states:
@@ -1140,7 +1241,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     f"ConversationHandler{' ' + self.name if self.name is not None else ''}.",
                     stacklevel=2,
                 )
-            self._conversations[key] = new_state
+            conversation_data.state = new_state
+            self._conversations[conversation_data.key] = conversation_data
 
     async def _trigger_timeout(self, context: CCT) -> None:
         """This is run whenever a conversation has timed out. Also makes sure that all handlers
@@ -1180,8 +1282,15 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                         stacklevel=2,
                     )
 
+        conversation_data = self._conversations[ctxt.conversation_key]
+
         await self._update_state(
-            self.END, ctxt.conversation_key, ctxt.update, callback_context, True, ctxt.application
+            new_state=self.END,
+            conversation_data=conversation_data,
+            update=ctxt.update,
+            context=callback_context,
+            block=True,
+            application=ctxt.application,
         )
 
     async def _execute_state_entry_handlers(
@@ -1217,3 +1326,31 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                         "ApplicationHandlerStop in State_entry_handlers has no effect. Ignoring.",
                         stacklevel=2,
                     )
+
+    async def _restore_timeout_jobs(
+        self, application: "Application", stored_conversations: ConversationDict
+    ) -> None:
+        if not (self.persistent and self.name and application.persistence):
+            raise RuntimeError(
+                "This handler is not persistent, has no name or the application has no "
+                "persistence!"
+            )
+        for key, conversation_data in stored_conversations.items():
+            if conversation_data.state is None:
+                continue
+            update = conversation_data.update_as_object(application.bot)
+            if update is None:
+                continue
+            context = application.context_types.context.from_update(
+                update=update, application=application
+            )
+            self._schedule_job(
+                new_state=conversation_data.state,
+                application=application,
+                update=update,
+                context=context,
+                conversation_key=key,
+                current_conversation=conversation_data,
+                conversation_timeout=conversation_data.timeout,
+                timeout_job_kwargs={"misfire_grace_time": None},
+            )

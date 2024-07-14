@@ -27,6 +27,8 @@ import pytest
 
 from telegram import Chat, Message, TelegramObject, Update, User
 from telegram.ext import ContextTypes, PersistenceInput, PicklePersistence
+from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._picklepersistence import _BotUnpickler
 from telegram.warnings import PTBUserWarning
 from tests.auxil.files import PROJECT_ROOT_PATH
 from tests.auxil.pytest_classes import make_bot
@@ -73,9 +75,18 @@ def callback_data():
 @pytest.fixture()
 def conversations():
     return {
-        "name1": {(123, 123): 3, (456, 654): 4},
-        "name2": {(123, 321): 1, (890, 890): 2},
-        "name3": {(123, 321): 1, (890, 890): 2},
+        "name1": {
+            (123, 123): ConversationData((123, 123), 3),
+            (456, 654): ConversationData((456, 654), 4),
+        },
+        "name2": {
+            (123, 321): ConversationData((123, 321), 1),
+            (890, 890): ConversationData((890, 890), 2),
+        },
+        "name3": {
+            (123, 321): ConversationData((123, 321), 1),
+            (890, 890): ConversationData((890, 890), 2),
+        },
     }
 
 
@@ -281,7 +292,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_chat_data(123, "data")
         assert file_path.is_file() != on_flush
 
-        await pickle_persistence.update_conversation("name", (1, 1), "new_state")
+        await pickle_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         assert file_path.is_file() != on_flush
 
         await pickle_persistence.flush()
@@ -383,14 +394,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -419,14 +430,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -452,14 +463,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -487,14 +498,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -523,14 +534,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -558,14 +569,14 @@ class TestPicklePersistence:
 
         conversation1 = await pickle_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        assert conversation1[(123, 123)] == 3
-        assert conversation1[(456, 654)] == 4
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await pickle_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        assert conversation2[(123, 321)] == 1
-        assert conversation2[(890, 890)] == 2
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 
@@ -611,19 +622,23 @@ class TestPicklePersistence:
         assert callback_data_test == callback_data
 
         conversation1 = await pickle_persistence.get_conversations("name1")
-        conversation1[(123, 123)] = 5
+        conversation1[(123, 123)] = ConversationData((123, 123), 5)
         assert pickle_persistence.conversations["name1"] != conversation1
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
         assert pickle_persistence.conversations["name1"] == conversation1
         assert await pickle_persistence.get_conversations("name1") == conversation1
         with Path("pickletest_conversations").open("rb") as f:
-            conversations_test = dict(pickle.load(f))
+            conversations_test = _BotUnpickler(pickle_persistence.bot, f).load()
         assert conversations_test["name1"] == conversation1
 
         pickle_persistence.conversations = None
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
-        assert pickle_persistence.conversations["name1"] == {(123, 123): 5}
-        assert await pickle_persistence.get_conversations("name1") == {(123, 123): 5}
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
+        assert pickle_persistence.conversations["name1"] == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
+        assert await pickle_persistence.get_conversations("name1") == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
 
     async def test_updating_single_file(self, pickle_persistence, good_pickle_files):
         pickle_persistence.single_file = True
@@ -634,7 +649,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_user_data(12345, user_data[12345])
         assert pickle_persistence.user_data == user_data
         with Path("pickletest").open("rb") as f:
-            user_data_test = dict(pickle.load(f))["user_data"]
+            user_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["user_data"]
         assert user_data_test == user_data
         await pickle_persistence.drop_user_data(67890)
         assert 67890 not in await pickle_persistence.get_user_data()
@@ -645,7 +660,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_chat_data(-12345, chat_data[-12345])
         assert pickle_persistence.chat_data == chat_data
         with Path("pickletest").open("rb") as f:
-            chat_data_test = dict(pickle.load(f))["chat_data"]
+            chat_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["chat_data"]
         assert chat_data_test == chat_data
         await pickle_persistence.drop_chat_data(-67890)
         assert -67890 not in await pickle_persistence.get_chat_data()
@@ -656,7 +671,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_bot_data(bot_data)
         assert pickle_persistence.bot_data == bot_data
         with Path("pickletest").open("rb") as f:
-            bot_data_test = pickle.load(f)["bot_data"]
+            bot_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["bot_data"]
         assert bot_data_test == bot_data
 
         callback_data = await pickle_persistence.get_callback_data()
@@ -665,23 +680,27 @@ class TestPicklePersistence:
         await pickle_persistence.update_callback_data(callback_data)
         assert pickle_persistence.callback_data == callback_data
         with Path("pickletest").open("rb") as f:
-            callback_data_test = pickle.load(f)["callback_data"]
+            callback_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["callback_data"]
         assert callback_data_test == callback_data
 
         conversation1 = await pickle_persistence.get_conversations("name1")
-        conversation1[(123, 123)] = 5
+        conversation1[(123, 123)] = ConversationData((123, 123), 5)
         assert pickle_persistence.conversations["name1"] != conversation1
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
         assert pickle_persistence.conversations["name1"] == conversation1
         assert await pickle_persistence.get_conversations("name1") == conversation1
         with Path("pickletest").open("rb") as f:
-            conversations_test = dict(pickle.load(f))["conversations"]
+            conversations_test = (_BotUnpickler(pickle_persistence.bot, f).load())["conversations"]
         assert conversations_test["name1"] == conversation1
 
         pickle_persistence.conversations = None
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
-        assert pickle_persistence.conversations["name1"] == {(123, 123): 5}
-        assert await pickle_persistence.get_conversations("name1") == {(123, 123): 5}
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
+        assert pickle_persistence.conversations["name1"] == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
+        assert await pickle_persistence.get_conversations("name1") == {
+            (123, 123): ConversationData((123, 123), 5)
+        }
 
     async def test_updating_single_file_no_data(self, pickle_persistence):
         pickle_persistence.single_file = True
@@ -756,10 +775,10 @@ class TestPicklePersistence:
         assert callback_data_test != callback_data
 
         conversation1 = await pickle_persistence.get_conversations("name1")
-        conversation1[(123, 123)] = 5
+        conversation1[(123, 123)] = ConversationData((123, 123), 5)
         assert pickle_persistence.conversations["name1"] != conversation1
 
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
         assert pickle_persistence.conversations["name1"] == conversation1
 
         with Path("pickletest_conversations").open("rb") as f:
@@ -780,7 +799,7 @@ class TestPicklePersistence:
         assert bot_data_test == bot_data
 
         with Path("pickletest_conversations").open("rb") as f:
-            conversations_test = dict(pickle.load(f))
+            conversations_test = dict(_BotUnpickler(pickle_persistence.bot, f).load())
         assert conversations_test["name1"] == conversation1
 
     async def test_save_on_flush_single_files(self, pickle_persistence, good_pickle_files):
@@ -829,9 +848,9 @@ class TestPicklePersistence:
         assert callback_data_test != callback_data
 
         conversation1 = await pickle_persistence.get_conversations("name1")
-        conversation1[(123, 123)] = 5
+        conversation1[(123, 123)] = ConversationData((123, 123), 5)
         assert pickle_persistence.conversations["name1"] != conversation1
-        await pickle_persistence.update_conversation("name1", (123, 123), 5)
+        await pickle_persistence.update_conversation("name1", ConversationData((123, 123), 5))
         assert pickle_persistence.conversations["name1"] == conversation1
         with Path("pickletest").open("rb") as f:
             conversations_test = dict(pickle.load(f))["conversations"]
@@ -839,19 +858,19 @@ class TestPicklePersistence:
 
         await pickle_persistence.flush()
         with Path("pickletest").open("rb") as f:
-            user_data_test = dict(pickle.load(f))["user_data"]
+            user_data_test = dict(_BotUnpickler(pickle_persistence.bot, f).load())["user_data"]
         assert user_data_test == user_data
 
         with Path("pickletest").open("rb") as f:
-            chat_data_test = dict(pickle.load(f))["chat_data"]
+            chat_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["chat_data"]
         assert chat_data_test == chat_data
 
         with Path("pickletest").open("rb") as f:
-            bot_data_test = pickle.load(f)["bot_data"]
+            bot_data_test = (_BotUnpickler(pickle_persistence.bot, f).load())["bot_data"]
         assert bot_data_test == bot_data
 
         with Path("pickletest").open("rb") as f:
-            conversations_test = dict(pickle.load(f))["conversations"]
+            conversations_test = (_BotUnpickler(pickle_persistence.bot, f).load())["conversations"]
         assert conversations_test["name1"] == conversation1
 
     async def test_custom_pickler_unpickler_simple(
@@ -989,7 +1008,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_bot_data(bot_data)
         await pickle_persistence.update_user_data(12345, user_data[12345])
         await pickle_persistence.update_chat_data(-12345, chat_data[-12345])
-        await pickle_persistence.update_conversation("name", (1, 1), "new_state")
+        await pickle_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         await pickle_persistence.update_callback_data(callback_data)
 
         assert pickle_persistence.filepath.is_file()
@@ -999,7 +1018,7 @@ class TestPicklePersistence:
         await pickle_persistence.update_bot_data(bot_data)
         await pickle_persistence.update_user_data(12345, user_data[12345])
         await pickle_persistence.update_chat_data(-12345, chat_data[-12345])
-        await pickle_persistence.update_conversation("name", (1, 1), "new_state")
+        await pickle_persistence.update_conversation("name", ConversationData((1, 1), "new_state"))
         await pickle_persistence.update_callback_data(callback_data)
 
         assert not pickle_persistence.filepath.is_file()

@@ -27,7 +27,8 @@ from telegram._utils.types import FilePathInput
 from telegram._utils.warnings import warn
 from telegram.ext import BasePersistence, PersistenceInput
 from telegram.ext._contexttypes import ContextTypes
-from telegram.ext._utils.types import BD, CD, UD, CDCData, ConversationDict, ConversationKey
+from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._utils.types import BD, CD, UD, CDCData, ConversationDict
 
 _REPLACED_KNOWN_BOT = "a known bot replaced by PTB's PicklePersistence"
 _REPLACED_UNKNOWN_BOT = "an unknown bot replaced by PTB's PicklePersistence"
@@ -383,24 +384,22 @@ class PicklePersistence(BasePersistence[UD, CD, BD]):
             self.conversations = data
         else:
             self._load_singlefile()
-        return self.conversations.get(name, {}).copy()  # type: ignore[union-attr]
+        return self.conversations.get(name, {}).copy()  # type: ignore
 
-    async def update_conversation(
-        self, name: str, key: ConversationKey, new_state: Optional[object]
-    ) -> None:
+    async def update_conversation(self, name: str, conversation_data: ConversationData) -> None:
         """Will update the conversations for the given handler and depending on :attr:`on_flush`
         save the pickle file.
 
         Args:
             name (:obj:`str`): The handler's name.
-            key (:obj:`tuple`): The key the state is changed for.
-            new_state (:class:`object`): The new state for the given key.
+            conversation_data (:obj:`Persistence"ConversationData"`): The relevant data for
+            the conversations.
         """
         if not self.conversations:
             self.conversations = {}
-        if self.conversations.setdefault(name, {}).get(key) == new_state:
+        if self.conversations.setdefault(name, {}).get(conversation_data.key) == conversation_data:
             return
-        self.conversations[name][key] = new_state
+        self.conversations[name][conversation_data.key] = conversation_data
         if not self.on_flush:
             if not self.single_file:
                 self._dump_file(Path(f"{self.filepath}_conversations"), self.conversations)

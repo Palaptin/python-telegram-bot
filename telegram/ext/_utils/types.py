@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 
     from telegram import Bot
     from telegram.ext import BaseRateLimiter, CallbackContext, JobQueue
+    from telegram.ext._handlers.conversationhandler import ConversationData
 
 CCT = TypeVar("CCT", bound="CallbackContext[Any, Any, Any, Any]")
 """An instance of :class:`telegram.ext.CallbackContext` or a custom subclass.
@@ -64,11 +65,15 @@ JobCallback = Callable[[CCT], Coroutine[Any, Any, Any]]
 """
 
 ConversationKey = Tuple[Union[int, str], ...]
-ConversationDict = MutableMapping[ConversationKey, object]
-"""Dict[Tuple[:obj:`int` | :obj:`str`, ...], Optional[:obj:`object`]]:
+ConversationDict = MutableMapping[ConversationKey, "ConversationData"]
+"""Dict[Tuple[:obj:`int` | :obj:`str`, ...], Optional[:obj:`ConversationData`]]:
     Dicts as maintained by the :class:`telegram.ext.ConversationHandler`.
 
     .. versionadded:: 13.6
+
+    .. versionchanged:: NEXT.VERSION
+            Changed type of values to :obj:`ConversationData`, the new type for
+            ConversationHandlers.
 """
 
 CDCData = Tuple[List[Tuple[str, float, Dict[str, Any]]], Dict[str, str]]
