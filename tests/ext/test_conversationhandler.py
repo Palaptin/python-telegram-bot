@@ -1229,6 +1229,9 @@ class TestConversationHandler:
                 return
             raise error
 
+        async def error_handler(*a, **kw):
+            return
+
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", conv_entry)],
             states={1: [MessageHandler(filters.Text(["error"]), raise_error)]},
@@ -1237,6 +1240,7 @@ class TestConversationHandler:
             block=False,
         )
         app.add_handler(handler)
+        app.add_error_handler(error_handler)
 
         message = Message(
             0,
@@ -1256,22 +1260,20 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             await asyncio.sleep(0.1)
             message.text = "error"
-            await app.process_update(Update(update_id=0, message=message))
-            await asyncio.sleep(0.1)
             caplog.clear()
             with caplog.at_level(logging.ERROR):
+                await app.process_update(Update(update_id=0, message=message))
+                await asyncio.sleep(0.1)
                 # This also makes sure that we're still in the same state
                 assert handler.check_update(Update(0, message=message))
             if test_type == "exception":
-                pass
-                # TODO FIX ME
-                # assert len(caplog.records) == 1
-                # assert caplog.records[0].name == "telegram.ext.ConversationHandler"
-                # assert (
-                #     caplog.records[0].message
-                #     == "Task function raised exception. Falling back to old state 1"
-                # )
-                # assert caplog.records[0].exc_info[1] is None
+                assert len(caplog.records) == 1
+                assert caplog.records[0].name == "telegram.ext.ConversationHandler"
+                assert (
+                    caplog.records[0].message
+                    == "Task function raised exception. Falling back to old state 1"
+                )
+                assert caplog.records[0].exc_info[1] is None
             else:
                 assert len(caplog.records) == 0
 
@@ -1284,6 +1286,9 @@ class TestConversationHandler:
         async def raise_error(*a, **kw):
             raise error
 
+        async def error_handler(*a, **kw):
+            return
+
         handler = ConversationHandler(
             entry_points=[CommandHandler("start", raise_error, block=False)],
             states={},
@@ -1291,6 +1296,7 @@ class TestConversationHandler:
             fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
+        app.add_error_handler(error_handler)
 
         message = Message(
             0,
@@ -1307,20 +1313,19 @@ class TestConversationHandler:
         message.entities[0]._unfreeze()
         # start the conversation
         async with app:
-            await app.process_update(Update(update_id=0, message=message))
-            await asyncio.sleep(0.1)
             caplog.clear()
             with caplog.at_level(logging.ERROR):
-                # This also makes sure that we're still in the same state
-                assert handler.check_update(Update(0, message=message))
-            # TODO FIX ME
-            # assert len(caplog.records) == 1
-            # assert caplog.records[0].name == "telegram.ext.ConversationHandler"
-            # assert (
-            #     caplog.records[0].message
-            #     == "Task function raised exception. Falling back to old state None"
-            # )
-            # assert caplog.records[0].exc_info[1] is None
+                await app.process_update(Update(update_id=0, message=message))
+                await asyncio.sleep(0.1)
+            # This also makes sure that we're still in the same state
+            assert handler.check_update(Update(0, message=message))
+            assert len(caplog.records) == 1
+            assert caplog.records[0].name == "telegram.ext.ConversationHandler"
+            assert (
+                caplog.records[0].message
+                == "Task function raised exception. Falling back to old state None"
+            )
+            assert caplog.records[0].exc_info[1] is None
 
     async def test_conversation_timeout(self, app, bot, user1):
         handler = ConversationHandler(

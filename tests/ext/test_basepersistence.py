@@ -205,6 +205,8 @@ class TrackingPersistence(BasePersistence):
 class TrackingConversationHandler(ConversationHandler):
     def __init__(self, *args, **kwargs):
         states = {state.value: [self.build_handler(state)] for state in HandlerStates}
+        # remove the end state since it is not used and triggers a warning
+        del states[HandlerStates.END]
         entry_points = [self.build_handler(HandlerStates.END)]
         super().__init__(*args, **kwargs, states=states, entry_points=entry_points)
 
