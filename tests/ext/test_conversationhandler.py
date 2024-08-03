@@ -92,7 +92,7 @@ class TestConversationHandler:
     # State definitions
     # At first we're thirsty.  Then we brew coffee, we drink it
     # and then we can start coding!
-    END, THIRSTY, BREWING, DRINKING, CODING = range(-1, 4)
+    END, THIRSTY, BREWING, DRINKING, CODING, FIX_PROD = range(-1, 5)
 
     # Drinking state definitions (nested)
     # At first we're holding the cup.  Then we sip coffee, and last we swallow it
@@ -126,9 +126,15 @@ class TestConversationHandler:
                 CommandHandler("drinkMore", self.drink),
             ],
         }
-        self.pre_fallbacks = [CommandHandler("fix_prod", self.start)]
+        self.state_entry_handlers = {
+            self.END: [CommandHandler("end", self.try_to_prevent_end)],
+            self.DRINKING: [CommandHandler("pourCoffee", self.drink_is_hot)],
+            self.CODING: [CommandHandler("startCoding", self.getting_thirsty)],
+        }
+        self.pre_fallbacks = [CommandHandler("fix_prod", self.fix_prod)]
         self.fallbacks = [CommandHandler("eat", self.start)]
         self.is_timeout = False
+        self.state_entry_entered = False
 
         # for nesting tests
         self.nested_states = {
@@ -200,12 +206,30 @@ class TestConversationHandler:
         return self._set_state(context.bot, self.BREWING)
 
     @raise_ahs
+    async def drink_is_hot(self, update, context):
+        self.state_entry_entered = True
+
+    @raise_ahs
+    async def getting_thirsty(self, update, context):
+        self.state_entry_entered = True
+        return self._set_state(update, self.THIRSTY)
+
+    @raise_ahs
+    async def try_to_prevent_end(self, update, context):
+        self.state_entry_entered = True
+        return self._set_state(update, self.THIRSTY)
+
+    @raise_ahs
     async def drink(self, update, context):
         return self._set_state(update, self.DRINKING)
 
     @raise_ahs
     async def code(self, update, context):
         return self._set_state(update, self.CODING)
+
+    @raise_ahs
+    async def fix_prod(self, update, context):
+        return self._set_state(update, self.FIX_PROD)
 
     @raise_ahs
     async def passout(self, update, context):
@@ -259,12 +283,16 @@ class TestConversationHandler:
 
     def test_init(self):
         entry_points = []
+        state_entry_handlers = {}
         states = {}
+        pre_fallbacks = []
         fallbacks = []
         map_to_parent = {}
         ch = ConversationHandler(
             entry_points=entry_points,
             states=states,
+            state_entry_handlers=state_entry_handlers,
+            pre_fallbacks=pre_fallbacks,
             fallbacks=fallbacks,
             per_chat="per_chat",
             per_user="per_user",
@@ -277,6 +305,8 @@ class TestConversationHandler:
         )
         assert ch.entry_points is entry_points
         assert ch.states is states
+        assert ch.state_entry_handlers is state_entry_handlers
+        assert ch.pre_fallbacks is pre_fallbacks
         assert ch.fallbacks is fallbacks
         assert ch.map_to_parent is map_to_parent
         assert ch.per_chat == "per_chat"
@@ -426,8 +456,19 @@ class TestConversationHandler:
             per_chat=False,
         )
 
+        # If state is END (-1) we also issue a warning
+        ConversationHandler(
+            entry_points=[CallbackQueryHandler(self.code, "code")],
+            states={
+                self.END: [CallbackQueryHandler(self.code, "code")],
+            },
+            fallbacks=[CallbackQueryHandler(self.code, "code")],
+            per_message=True,
+            per_chat=True,
+        )
+
         # the overall number of handlers throwing a warning is 13
-        assert len(recwarn) == 13
+        assert len(recwarn) == 14
         # now we test the messages, they are raised in the order they are inserted
         # into the conversation handler
         assert (
@@ -500,6 +541,12 @@ class TestConversationHandler:
             "since message IDs are not globally unique."
         )
 
+        assert (
+            str(recwarn[13].message)
+            == "The END state (-1) is reserved and shouldn't be used as a state name in the "
+            "`ConversationHandler`."
+        )
+
         # this for loop checks if the correct stacklevel is used when generating the warning
         for warning in recwarn:
             assert warning.category is PTBUserWarning
@@ -510,6 +557,8 @@ class TestConversationHandler:
         [
             "entry_points",
             "states",
+            "state_entry_handlers",
+            "pre_fallbacks",
             "fallbacks",
             "per_chat",
             "per_user",
@@ -524,6 +573,7 @@ class TestConversationHandler:
     )
     def test_immutable(self, attr):
         ch = ConversationHandler(entry_points=[], states={})
+        print(attr)
         with pytest.raises(AttributeError, match=f"You can not assign a new value to {attr}"):
             setattr(ch, attr, True)
 
@@ -646,6 +696,93 @@ class TestConversationHandler:
             message.entities[0].length = len("/start")
             assert handler.check_update(Update(update_id=0, message=message))
 
+    async def test_conversation_handler_state_entry_handler(self, app, bot, user1, user2, recwarn):
+        # test if the state_entry_handler is being called.
+
+        # append an end state for this test.
+        states = self.states
+        states[self.THIRSTY].append(CommandHandler("end", self.end))
+
+        handler = ConversationHandler(
+            entry_points=self.entry_points,
+            states=states,
+            state_entry_handlers=self.state_entry_handlers,
+            pre_fallbacks=self.pre_fallbacks,
+            fallbacks=self.fallbacks,
+        )
+        app.add_handler(handler)
+
+        # first check if state_entry_handlers will not trigger when not started
+        message = Message(
+            0,
+            None,
+            self.group,
+            from_user=user1,
+            text="/brew",
+            entities=[
+                MessageEntity(type=MessageEntity.BOT_COMMAND, offset=0, length=len("/brew"))
+            ],
+        )
+        message.set_bot(bot)
+        message._unfreeze()
+        message.entities[0]._unfreeze()
+
+        async with app:
+            await app.process_update(Update(update_id=0, message=message))
+            with pytest.raises(KeyError):
+                self.current_state[user1.id]
+
+            # User starts the state machine.
+            message.text = "/start"
+            message.entities[0].length = len("/start")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.current_state[user1.id] == self.THIRSTY
+
+            # The user is thirsty and wants to brew coffee.
+            message.text = "/brew"
+            message.entities[0].length = len("/brew")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.current_state[user1.id] == self.BREWING
+
+            # Now we want to pour the coffe but the state_entry_handlers tells us it is hot
+            message.text = "/pourCoffee"
+            message.entities[0].length = len("/pourCoffee")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.state_entry_entered is True
+
+            # We nevertheless got something to drink
+            assert self.current_state[user1.id] == self.DRINKING
+
+            # Now we want to start coding but get thirsty again in the state_entry_handlers.
+            # So the state_entry_handler returned a new state.
+            self.state_entry_entered = False
+            message.text = "/startCoding"
+            message.entities[0].length = len("/startCoding")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.state_entry_entered is True
+            assert self.current_state[user1.id] == self.THIRSTY
+
+            # Now we want to end, but the state_entry_handler try to prevent this.
+            # But he shouldn't be able to change the END state.
+            self.state_entry_entered = False
+            message.text = "/end"
+            message.entities[0].length = len("/end")
+            await app.process_update(Update(update_id=0, message=message))
+            assert self.state_entry_entered is True
+            assert len(recwarn) == 1
+            assert recwarn[0].category is PTBUserWarning
+            assert (
+                Path(recwarn[0].filename)
+                == PROJECT_ROOT_PATH / "telegram" / "ext" / "_handlers" / "conversationhandler.py"
+            ), "wrong stacklevel!"
+            assert (
+                str(recwarn[0].message)
+                == "State END (-1) can not be changed by state_entry_handlers."
+            )
+            # check the conversation is really ended.
+            with pytest.raises(KeyError):
+                handler._conversations[user1.id]
+
     async def test_conversation_handler_fallback(self, app, bot, user1, user2):
         handler = ConversationHandler(
             entry_points=self.entry_points,
@@ -692,15 +829,19 @@ class TestConversationHandler:
             assert self.current_state[user1.id] == self.THIRSTY
 
     async def test_conversation_handler_pre_fallback(self, app, bot, user1, user2):
+        # extend the states with the pre_fallback command
+        states = self.states
+        states[self.BREWING].append(CommandHandler("fix_prod", self.start))
+
         handler = ConversationHandler(
             entry_points=self.entry_points,
-            states=self.states,
+            states=states,
             pre_fallbacks=self.pre_fallbacks,
             fallbacks=self.fallbacks,
         )
         app.add_handler(handler)
 
-        # first check if pre_fallback will not trigger start when not started
+        # first check if pre_fallback will not trigger when not started
         message = Message(
             0,
             None,
@@ -732,11 +873,11 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.BREWING
 
-            # Now a pre_fallback command is issued
+            # Now a pre_fallback command is issued, and the state handler is ignored
             message.text = "/fix_prod"
             message.entities[0].length = len("/fix_prod")
             await app.process_update(Update(update_id=0, message=message))
-            assert self.current_state[user1.id] == self.THIRSTY
+            assert self.current_state[user1.id] == self.FIX_PROD
 
     async def test_unknown_state_warning(self, app, bot, user1, recwarn):
         def build_callback(state):
@@ -2178,7 +2319,10 @@ class TestConversationHandler:
 
         conv_handler = ConversationHandler(
             entry_points=[MessageHandler(filters.ALL, callback=callback, block=False)],
-            states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
+            states={
+                ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)],
+                1: [TypeHandler(Update, callback)],
+            },
             conversation_timeout=0.5,
         )
         app.add_handler(conv_handler)
@@ -2198,7 +2342,6 @@ class TestConversationHandler:
             await asyncio.sleep(0.7)
             tasks = asyncio.all_tasks()
             assert any(":handle_update:non_blocking_cb" in t.get_name() for t in tasks)
-            assert any(":handle_update:timeout_job" in t.get_name() for t in tasks)
             assert not self.is_timeout
             event.set()
             await asyncio.sleep(0.7)

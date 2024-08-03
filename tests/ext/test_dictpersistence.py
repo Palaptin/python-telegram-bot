@@ -195,18 +195,14 @@ class TestDictPersistence:
 
         conversation1 = await dict_persistence.get_conversations("name1")
         assert isinstance(conversation1, dict)
-        conv_data = ConversationData((123, 123), 3, None, None)
-        assert conversation1[(123, 123)] == conv_data
-        conv_data = ConversationData((456, 654), 4, None, None)
-        assert conversation1[(456, 654)] == conv_data
+        assert conversation1[(123, 123)] == ConversationData((123, 123), 3, None, None)
+        assert conversation1[(456, 654)] == ConversationData((456, 654), 4, None, None)
         with pytest.raises(KeyError):
             conversation1[(890, 890)]
         conversation2 = await dict_persistence.get_conversations("name2")
         assert isinstance(conversation1, dict)
-        conv_data = ConversationData((123, 321), 1, None, None)
-        assert conversation2[(123, 321)] == conv_data
-        conv_data = ConversationData((890, 890), 2, None, None)
-        assert conversation2[(890, 890)] == conv_data
+        assert conversation2[(123, 321)] == ConversationData((123, 321), 1, None, None)
+        assert conversation2[(890, 890)] == ConversationData((890, 890), 2, None, None)
         with pytest.raises(KeyError):
             conversation2[(123, 123)]
 

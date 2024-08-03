@@ -236,7 +236,9 @@ class PicklePersistence(BasePersistence[UD, CD, BD]):
         self.chat_data: Optional[Dict[int, CD]] = None
         self.bot_data: Optional[BD] = None
         self.callback_data: Optional[CDCData] = None
-        self.conversations: Optional[Dict[str, Dict[Tuple[Union[int, str], ...], object]]] = None
+        self.conversations: Optional[
+            Dict[str, Dict[Tuple[Union[int, str], ...], ConversationData]]
+        ] = None
         self.context_types: ContextTypes[Any, UD, CD, BD] = cast(
             ContextTypes[Any, UD, CD, BD], context_types or ContextTypes()
         )
@@ -384,12 +386,16 @@ class PicklePersistence(BasePersistence[UD, CD, BD]):
             self.conversations = data
         else:
             self._load_singlefile()
-        return self.conversations.get(name, {}).copy()  # type: ignore
+        return self.conversations.get(name, {}).copy()  # type: ignore[union-attr]
 
     async def update_conversation(self, name: str, conversation_data: ConversationData) -> None:
         """Will update the conversations for the given handler and depending on :attr:`on_flush`
         save the pickle file.
 
+        .. versionchanged:: NEXT.VERSION
+           Removed the parameters key and new_state, and introduced the parameter
+           conversation_data.
+           It holds key and state (the new state) as well as the data needed for timeout jobs
         Args:
             name (:obj:`str`): The handler's name.
             conversation_data (:obj:`Persistence"ConversationData"`): The relevant data for

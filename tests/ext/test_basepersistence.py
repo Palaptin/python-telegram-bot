@@ -1653,6 +1653,7 @@ class TestBasePersistence:
         assert papp.persistence.updated_conversations == {
             "grand_child": {(1, 1): 1},
             "child": {(1, 1): 1},
+            "parent": {(1, 1): 1},
         }
         assert papp.persistence.conversations == {
             "grand_child": {(1, 1): ConversationData((1, 1), HandlerStates.END)},

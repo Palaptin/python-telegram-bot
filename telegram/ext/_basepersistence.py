@@ -272,14 +272,14 @@ class BasePersistence(Generic[UD, CD, BD], ABC):
         """
 
     @abstractmethod
-    async def update_conversation(
-        self,
-        name: str,
-        conversation_data: "ConversationData",
-    ) -> None:
+    async def update_conversation(self, name: str, conversation_data: "ConversationData") -> None:
         """Will be called when a :class:`telegram.ext.ConversationHandler` changes states.
         This allows the storage of the new state in the persistence.
 
+        .. versionchanged:: NEXT.VERSION
+           Removed the parameters key and new_state, and introduced the parameter
+           conversation_data.
+           It holds key and state (the new state) as well as the data needed for timeout jobs
         Args:
             name (:obj:`str`): The handler's name.
             conversation_data (:obj:`Persistence"ConversationData"`): The relevant data for

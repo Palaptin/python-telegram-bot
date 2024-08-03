@@ -78,6 +78,25 @@ class _ConversationTimeoutContext(Generic[CCT]):
 
 @dataclass
 class ConversationData:
+    """Used as a datastore for persistence, as well as for internal state handling.
+
+    .. versionadded:: NEXT.VERSION
+    Args:
+        key (:obj:`ConversationKey`): The key of the corresponding conversation.
+        state (:obj:`Object`): The state in which the corresponding conversation is currently.
+        timeout (:obj:`float` | :obj:`datetime.timedelta`, optional): Next timeout of the
+            corresponding timeout job.
+        update (_obj:`Update`, optional): The :obj:`update`.
+
+    Attributes:
+        key (:obj:`ConversationKey`): The key of the corresponding conversation.
+        state (:obj:`Object`): The state in which the corresponding conversation is currently.
+        timeout (:obj:`float` | :obj:`datetime.timedelta`): Next timeout of the
+            corresponding timeout job.
+        json_update (_obj:`str`): The update in json form for the
+            corresponding timeout job.
+
+    """
 
     key: ConversationKey
     state: object
@@ -97,17 +116,39 @@ class ConversationData:
         self.set_update(update)
 
     def set_update(self, update: Optional[Update]) -> None:
+        """set the attribute json_update from an :obj:`Update`"""
         self.json_update = update.to_json() if update is not None else ""
 
     def update_as_object(self, bot: Bot) -> Optional[Update]:
+        """
+        Creates an update from the :attr:`json_update`.
+
+        Args:
+            bot (:class:`telegram.Bot`): The bot.
+
+        Returns:the Update created from :attr:`json_update`.
+
+        """
         return Update.de_json(json.loads(self.json_update), bot) if self.json_update else None
 
     def copy(self) -> "ConversationData":
+        """
+        Creates a copy of itself.
+
+        Returns: a copy of itself.
+
+        """
         copy = ConversationData(self.key, self.state, self.timeout)
         copy.json_update = self.json_update
         return copy
 
     def to_dict(self) -> dict:
+        """
+        Helper method to transform the internal data to an :obj:`dict`.
+
+        Returns: a dict with the keys: key, state, timeout, update.
+
+        """
         return {
             "key": self.key,
             "state": self.state,
@@ -213,17 +254,29 @@ class PendingState:
 
 
 class ConversationHandlerKey(ABC):
+    """Interface class for creating keys for the ConversationHandler.
+    These keys are used to match Updates to a conversation.
+    Subclass this object for different implementations of key generation.
+
+    .. versionadded:: NEXT.VERSION
+    """
 
     @abstractmethod
     def from_update(self, update: object) -> ConversationKey:
         """Returns the ConversationHandlerKey for the update.
         If more than one key can be built for the update, the implementation may either choose
         one or raise an exception. If the update is not supported, the implementation may return
-        NotImplemented in which case only handlers for the state FSMState.IDLE will be used.
+        NotImplemented in which case no handler of this ConversationHandler will be executed.
         """
 
 
 class ExampleConversationHandlerKey(ConversationHandlerKey):
+    """Default implementation for key generation of the ConversationHandler.
+    These keys are used to match Updates to a conversation.
+
+    .. versionadded:: NEXT.VERSION
+    """
+
     per_chat: bool = True
     per_user: bool = True
     per_message: bool = False
@@ -247,7 +300,7 @@ class ExampleConversationHandlerKey(ConversationHandlerKey):
         Builds the conversation key associated with the update.
 
         Parameters:
-            update (object): The update object to build the conversation key for.
+            update (:obj:`object`): The update object to build the conversation key for.
 
         Returns:
             ConversationKey: The conversation key associated with the update.
@@ -359,6 +412,10 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         conversation. For an example on nested :class:`ConversationHandler` s, see
         :any:`examples.nestedconversationbot`.
 
+    .. versionchanged:: NEXT.VERSION
+        Raise a Warning if ConversationHandler.END (-1) is used as a state.
+        Timeouts for non-blocking conversations now start after the handler has finished
+
     Examples:
         * :any:`Conversation Bot <examples.conversationbot>`
         * :any:`Conversation Bot 2 <examples.conversationbot2>`
@@ -380,10 +437,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             entering the corresponding state. The first handler whose :meth:`check_update` method
              returns :obj:`True` will be used. If all return :obj:`False`, the update is not
              handled here.
+
+             .. versionadded:: NEXT.VERSION
         pre_fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             will be checked at first if the user is in a conversation. The first handler which
             :meth:`check_update` method returns :obj:`True` will be used. If all return
             :obj:`False`, the update is not handled here.
+
+            .. versionadded:: NEXT.VERSION
         fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             might be used if the user is in a conversation, but every handler for their current
             state returned :obj:`False` on :meth:`check_update`. The first handler which
@@ -698,6 +759,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     def pre_fallbacks(self) -> List[BaseHandler[Update, CCT]]:
         """List[:class:`telegram.ext.BaseHandler`]: A list of handlers that will be
         checked before checking the different states.
+
+        .. versionadded:: NEXT.VERSION
         """
         return self._pre_fallbacks
 
@@ -725,12 +788,16 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         defines different entry handlers for the different states of conversation a user can be
         in and one or more associated :obj:`BaseHandler` objects that should be used in that
         state.
+
+        .. versionadded:: NEXT.VERSION
         """
         return self._state_entry_handlers
 
     @state_entry_handlers.setter
     def state_entry_handlers(self, _: object) -> NoReturn:
-        raise AttributeError("You can not assign a new value to states after initialization.")
+        raise AttributeError(
+            "You can not assign a new value to state_entry_handlers after initialization."
+        )
 
     @property
     def fallbacks(self) -> List[BaseHandler[Update, CCT]]:
@@ -893,33 +960,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
         return out
 
-    async def _schedule_job_delayed(
-        self,
-        new_state: asyncio.Task,
-        application: "Application[Any, CCT, Any, Any, Any, JobQueue]",
-        update: Update,
-        context: CCT,
-        conversation_key: ConversationKey,
-        current_conversation: ConversationData,
-    ) -> None:
-        try:
-            effective_new_state = await new_state
-        except Exception as exc:
-            _LOGGER.debug(
-                "Non-blocking handler callback raised exception. Not scheduling conversation "
-                "timeout.",
-                exc_info=exc,
-            )
-            return None
-        return self._schedule_job(
-            new_state=effective_new_state,
-            application=application,
-            update=update,
-            context=context,
-            conversation_key=conversation_key,
-            current_conversation=current_conversation,
-        )
-
     def _schedule_job(
         self,
         new_state: object,
@@ -987,7 +1027,8 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             return None
 
         key = self.key_builder.from_update(update)
-        # todo think about what to do if key is NotImplemented
+        if key == NotImplemented:
+            return None
 
         conversation_data = self._conversations.get(key)
         state = conversation_data.state if conversation_data is not None else None
@@ -1058,6 +1099,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     ) -> Optional[object]:
         """Send the update to the callback for the current state and BaseHandler
 
+        .. versionchanged:: NEXT.VERSION
+            now no longer timeout jobs are created for children which are being mapped to a
+            parent.
         Args:
             check_result: The result from :meth:`check_update`. For this handler it's a tuple of
                 the conversation state, key, handler, and the handler's check result.
@@ -1091,8 +1135,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 timeout_job.schedule_removal()
             current_conversation.timeout = None
             current_conversation.set_update(None)
-
-        # await self._ensure_conversation_data(application, conversation_key, current_state)
 
         # Resolution order of "block":
         # 1. Setting of the selected handler
@@ -1138,44 +1180,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 raise ApplicationHandlerStop(self.map_to_parent.get(new_state))
             return self.map_to_parent.get(new_state)
 
-        if self.conversation_timeout:
-            async with self._timeout_jobs_lock:
-                if application.job_queue is None:
-                    warn(
-                        "Ignoring `conversation_timeout` because the Application has no JobQueue.",
-                        stacklevel=1,
-                    )
-                elif not application.job_queue.scheduler.running:
-                    warn(
-                        "Ignoring `conversation_timeout` because the Applications JobQueue is "
-                        "not running.",
-                        stacklevel=1,
-                    )
-                elif isinstance(new_state, asyncio.Task):
-                    # Add the new timeout job
-                    # checking if the new state is self.END is done in _schedule_job
-                    application.create_task(
-                        self._schedule_job_delayed(
-                            new_state=new_state,
-                            application=application,
-                            update=update,
-                            context=context,
-                            conversation_key=conversation_key,
-                            current_conversation=current_conversation,
-                        ),
-                        update=update,
-                        name=f"ConversationHandler:{update.update_id}:handle_update:timeout_job",
-                    )
-                else:
-                    self._schedule_job(
-                        new_state=new_state,
-                        application=application,
-                        update=update,
-                        context=context,
-                        conversation_key=conversation_key,
-                        current_conversation=current_conversation,
-                    )
-
         if current_state != self.WAITING:
             await self._update_state(
                 new_state=new_state,
@@ -1220,18 +1224,26 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             return
             # we will come back once the state is resolved
 
-        await self._execute_state_entry_handlers(
+        result = await self._execute_state_entry_handlers(
             new_state=new_state,
             update=update,
             context=context,
-            block=block,
             application=application,
         )
+        if result is not None:
+            if new_state != self.END:
+                new_state = result
+            else:
+                warn(
+                    "State END (-1) can not be changed by state_entry_handlers.",
+                    stacklevel=2,
+                )
 
         if new_state == self.END:
             if conversation_data.key in self._conversations:
                 # If there is no key in conversations, nothing is done.
                 del self._conversations[conversation_data.key]
+                return
 
         elif new_state is not None:
             if new_state not in self.states:
@@ -1242,7 +1254,31 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     stacklevel=2,
                 )
             conversation_data.state = new_state
-            self._conversations[conversation_data.key] = conversation_data
+
+        if self.conversation_timeout:
+            async with self._timeout_jobs_lock:
+                if application.job_queue is None:
+                    warn(
+                        "Ignoring `conversation_timeout` because the Application has no JobQueue.",
+                        stacklevel=1,
+                    )
+                elif not application.job_queue.scheduler.running:
+                    warn(
+                        "Ignoring `conversation_timeout` because the Applications JobQueue is "
+                        "not running.",
+                        stacklevel=1,
+                    )
+                else:
+                    self._schedule_job(
+                        new_state=new_state,
+                        application=application,
+                        update=update,
+                        context=context,
+                        conversation_key=conversation_data.key,
+                        current_conversation=conversation_data,
+                    )
+
+        self._conversations[conversation_data.key] = conversation_data
 
     async def _trigger_timeout(self, context: CCT) -> None:
         """This is run whenever a conversation has timed out. Also makes sure that all handlers
@@ -1298,34 +1334,23 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         new_state: object,
         update: Update,
         context: CCT,
-        block: DVType[bool],
         application: "Application",
-    ) -> None:
+    ) -> Optional[object]:
         state_entry_handlers = self.state_entry_handlers.get(new_state, [])
         for state_entry_handler in state_entry_handlers:
             check = state_entry_handler.check_update(update)
             if check is not None and check is not False:
                 try:
-                    if block:
-
-                        await state_entry_handler.handle_update(
-                            update, application, check, context
-                        )
-
-                    else:
-                        application.create_task(
-                            coroutine=state_entry_handler.handle_update(
-                                update, application, check, context
-                            ),
-                            update=update,
-                            name=f"ConversationHandler:{update.update_id}:"
-                            "handle_update:non_blocking_cb",
-                        )
+                    return await state_entry_handler.handle_update(
+                        update, application, check, context
+                    )
                 except ApplicationHandlerStop:
                     warn(
                         "ApplicationHandlerStop in State_entry_handlers has no effect. Ignoring.",
                         stacklevel=2,
                     )
+                break
+        return None
 
     async def _restore_timeout_jobs(
         self, application: "Application", stored_conversations: ConversationDict

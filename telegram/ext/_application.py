@@ -359,7 +359,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
         # This attribute will hold references to the conversation dicts of all conversation
         # handlers so that we can extract the changed states during `update_persistence`
         self._conversation_handler_conversations: Dict[
-            str, TrackingDict[ConversationKey, "ConversationData"]
+            str, TrackingDict[ConversationKey, ConversationData]
         ] = {}
 
         # A number of low-level helpers for the internal logic
@@ -1672,6 +1672,10 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
 
         .. seealso:: :attr:`telegram.ext.BasePersistence.update_interval`,
             :meth:`mark_data_for_update_persistence`
+
+        .. versionchanged:: NEXT.VERSION
+            Now calls update_conversation with ConversationHandler.END instead of None on
+            deleted Conversations.
         """
         async with self.__update_persistence_lock:
             await self.__update_persistence()
@@ -1734,14 +1738,17 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
 
         # Unfortunately due to circular imports this has to be here
         # pylint: disable=import-outside-toplevel
-        from telegram.ext._handlers.conversationhandler import ConversationHandler, PendingState
+        from telegram.ext._handlers.conversationhandler import (
+            ConversationData,
+            ConversationHandler,
+            PendingState,
+        )
 
         for name, (key, real_conversation_data) in itertools.chain.from_iterable(
             zip(itertools.repeat(name), states_dict.pop_accessed_write_items())
             for name, states_dict in self._conversation_handler_conversations.items()
         ):
             if real_conversation_data is TrackingDict.DELETED:
-                from telegram.ext._handlers.conversationhandler import ConversationData
 
                 conversation_data = ConversationData(
                     key=key,
@@ -1770,8 +1777,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
                     self._conversation_handler_conversations[name].mark_as_accessed(key)
             coroutines.add(
                 self.persistence.update_conversation(
-                    name=name,
-                    conversation_data=conversation_data,
+                    name=name, conversation_data=conversation_data
                 )
             )
 
