@@ -53,7 +53,7 @@ from telegram.ext._handlers.stringcommandhandler import StringCommandHandler
 from telegram.ext._handlers.stringregexhandler import StringRegexHandler
 from telegram.ext._handlers.typehandler import TypeHandler
 from telegram.ext._utils.trackingdict import TrackingDict
-from telegram.ext._utils.types import CCT, ConversationDict, ConversationKey
+from telegram.ext._utils.types import CCT, COD, ConversationDict, ConversationKey
 
 if TYPE_CHECKING:
     from telegram.ext import Application, Job, JobQueue
@@ -77,7 +77,7 @@ class _ConversationTimeoutContext(Generic[CCT]):
 
 
 @dataclass
-class ConversationData:
+class ConversationData(Generic[COD]):
     """Used as a datastore for persistence, as well as for internal state handling.
 
     .. versionadded:: NEXT.VERSION
@@ -87,6 +87,10 @@ class ConversationData:
         timeout (:obj:`float` | :obj:`datetime.timedelta`, optional): Next timeout of the
             corresponding timeout job.
         update (_obj:`Update`, optional): The :obj:`update`.
+                conversation_context_data :obj:`ConversationData.conversation_data`: An object that
+                can be used to keep any data in. For each update from the same conversation it will
+                be the same
+
 
     Attributes:
         key (:obj:`ConversationKey`): The key of the corresponding conversation.
@@ -95,6 +99,8 @@ class ConversationData:
             corresponding timeout job.
         json_update (_obj:`str`): The update in json form for the
             corresponding timeout job.
+        conversation_context_data (:obj:`ConversationData.conversation_data`): An object that can
+        be used to keep any data in. For each update from the same conversation it will be the same
 
     """
 
@@ -102,6 +108,7 @@ class ConversationData:
     state: object
     timeout: Optional[Union[float, datetime.timedelta]]
     json_update: str
+    conversation_context_data: COD
 
     def __init__(
         self,
@@ -109,7 +116,13 @@ class ConversationData:
         state: object,
         timeout: Optional[Union[float, datetime.timedelta]] = None,
         update: Optional[Update] = None,
+        conversation_context_data: Optional[COD] = None,
     ):
+        if conversation_context_data is None:
+            self.conversation_context_data = {}  # type: ignore
+        else:
+            self.conversation_context_data = conversation_context_data
+
         self.key = key
         self.state = state
         self.timeout = timeout
@@ -138,7 +151,12 @@ class ConversationData:
         Returns: a copy of itself.
 
         """
-        copy = ConversationData(self.key, self.state, self.timeout)
+        copy: ConversationData = ConversationData(
+            key=self.key,
+            state=self.state,
+            timeout=self.timeout,
+            conversation_context_data=self.conversation_context_data,
+        )
         copy.json_update = self.json_update
         return copy
 
@@ -485,6 +503,11 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         map_to_parent (Dict[:obj:`object`, :obj:`object`], optional): A :obj:`dict` that can be
             used to instruct a child conversation handler to transition into a mapped state on
             its parent conversation handler in place of a specified nested state.
+        conversation_context_data_type (:obj:`type`, optional): Determines the type of
+            :attr:`ConversationData.conversation_context_data
+            <CallbackContext.ConversationData.conversation_context_data>` of all (error-) handler
+            callbacks and job callbacks. Defaults to :obj:`dict`. Must support instantiating
+            without arguments.
         block (:obj:`bool`, optional): Pass :obj:`False` or :obj:`True` to set a default value for
             the :attr:`BaseHandler.block` setting of all handlers (in :attr:`entry_points`,
             :attr:`pre_fallbacks`, :attr:`states` and :attr:`fallbacks`). The resolution order for
@@ -527,6 +550,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         "_state_entry_handlers",
         "_states",
         "_timeout_jobs_lock",
+        "conversation_context_data_type",
         "key_builder",
         "timeout_jobs",
     )
@@ -559,6 +583,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         map_to_parent: Optional[Dict[object, object]] = None,
         block: DVType[bool] = DEFAULT_TRUE,
         key_builder: Optional[ConversationHandlerKey] = None,
+        conversation_context_data_type: Optional[COD] = None,
     ):
         # these imports need to be here because of circular import error otherwise
         from telegram.ext import (  # pylint: disable=import-outside-toplevel
@@ -580,6 +605,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self.key_builder: ConversationHandlerKey = key_builder or ExampleConversationHandlerKey(
             per_chat=per_chat, per_user=per_user, per_message=per_message
         )
+        self.conversation_context_data_type = conversation_context_data_type
 
         # self.block is what the Application checks and we want it to always run CH in a blocking
         # way so that CH can take care of any non-blocking logic internally
@@ -931,8 +957,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         # above might be partly overridden but that's okay since we warn about that in
         # add_handler
         stored_data = await application.persistence.get_conversations(self.name)
-        # Since CH.END is stored as normal state, we need to properly parse it here in order to
-        # don't add it to the _conversations dict
         # FOR BACKWARD COMPATIBILITY
         for key, conversation_data in stored_data.items():
             if not isinstance(conversation_data, ConversationData):
@@ -942,8 +966,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     "if no further errors occur",
                     stacklevel=1,
                 )
-                stored_data[key] = ConversationData(key=key, state=conversation_data)
+                stored_data[key] = ConversationData(
+                    key=key,
+                    state=conversation_data,
+                    conversation_context_data=self.conversation_context_data_type,
+                )
         # FOR BACKWARD COMPATIBILITY
+        # Since CH.END is stored as normal state, we need to properly parse it here in order to
+        # don't add it to the _conversations dict
         stored_data = {key: val for key, val in stored_data.items() if val.state != self.END}
         self._conversations.update_no_track(stored_data)
 
@@ -1122,10 +1152,13 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             current_conversation = ConversationData(
                 key=conversation_key,
                 state=None,
+                conversation_context_data=self.conversation_context_data_type,
                 update=None,
                 timeout=None,
             )
             self._conversations[conversation_key] = current_conversation
+
+        context._conversation_data = current_conversation  # pylint: disable=protected-access
 
         async with self._timeout_jobs_lock:
             # Remove the old timeout job (if present)

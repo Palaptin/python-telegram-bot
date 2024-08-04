@@ -1750,9 +1750,8 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
         ):
             if real_conversation_data is TrackingDict.DELETED:
 
-                conversation_data = ConversationData(
-                    key=key,
-                    state=ConversationHandler.END,
+                conversation_data: ConversationData = ConversationData(
+                    key=key, state=ConversationHandler.END
                 )
             else:
                 conversation_data = real_conversation_data.copy()

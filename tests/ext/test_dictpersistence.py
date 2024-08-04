@@ -90,12 +90,14 @@ def callback_data_json(callback_data):
 @pytest.fixture()
 def conversations_json(conversations):
     return """{"name1": {"[123, 123]": {"key": "[123, 123]", "state": 3, "timeout": null,
-              "update": null}, "[456, 654]": {"key": "[456, 654]", "state": 4, "timeout":
-              null, "update": null}}, "name2": {"[123, 321]": {"key": "[123, 321]", "state":
-              1, "timeout": null, "update": null}, "[890, 890]": {"key": "[890, 890]",
-              "state": 2, "timeout": null, "update": null}}, "name3": {"[123, 321]": {"key":
-              "[123, 321]", "state": 1, "timeout": null, "update": null}, "[890, 890]": {"key":
-              "[890, 890]", "state": 2, "timeout": null, "update": null}}}"""
+        "update": null, "conversation_context_data":null}, "[456, 654]": {"key": "[456, 654]",
+        "state": 4, "timeout": null, "update": null, "conversation_context_data":null}}, "name2": {
+        "[123, 321]": {"key": "[123, 321]", "state": 1, "timeout": null, "update": null,
+        "conversation_context_data":null}, "[890, 890]": {"key": "[890, 890]", "state": 2,
+        "timeout": null, "update": null, "conversation_context_data": null}}, "name3": {
+        "[123, 321]": {"key": "[123, 321]", "state": 1, "timeout": null, "update": null,
+        "conversation_context_data":null}, "[890, 890]": {"key": "[890, 890]", "state": 2,
+        "timeout": null, "update": null, "conversation_context_data":null}}}"""
 
 
 class TestDictPersistence:

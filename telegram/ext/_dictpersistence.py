@@ -466,6 +466,7 @@ class DictPersistence(BasePersistence[Dict[Any, Any], Dict[Any, Any], Dict[Any, 
                     conversations[handler][tuple(json.loads(key))] = ConversationData(
                         tuple(json.loads(conv_data["key"])),
                         conv_data["state"],
+                        conv_data["conversation_context_data"],
                         conv_data["timeout"],
                         conv_data["update"],
                     )

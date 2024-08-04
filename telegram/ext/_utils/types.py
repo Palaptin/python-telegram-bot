@@ -89,6 +89,11 @@ BT = TypeVar("BT", bound="Bot")
 
 .. versionadded:: 20.0
 """
+COD = TypeVar("COD")
+"""Type of the conversation data for a conversation.
+
+.. versionadded:: NEXT.VERSION
+"""
 UD = TypeVar("UD")
 """Type of the user data for a single user.
 

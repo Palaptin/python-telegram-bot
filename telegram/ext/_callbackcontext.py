@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from asyncio import Future, Queue
 
     from telegram.ext import Application, Job, JobQueue
+    from telegram.ext._handlers.conversationhandler import ConversationData
     from telegram.ext._utils.types import CCT
 
 _STORING_DATA_WIKI = (
@@ -124,6 +125,7 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
         "__dict__",
         "_application",
         "_chat_id",
+        "_conversation_data",
         "_user_id",
         "args",
         "coroutine",
@@ -141,6 +143,7 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
         self._application: Application[BT, CCT, UD, CD, BD, Any] = application
         self._chat_id: Optional[int] = chat_id
         self._user_id: Optional[int] = user_id
+        self._conversation_data: Optional[ConversationData] = None
         self.args: Optional[List[str]] = None
         self.matches: Optional[List[Match[str]]] = None
         self.error: Optional[Exception] = None
@@ -217,6 +220,29 @@ class CallbackContext(Generic[BT, UD, CD, BD]):
     def user_data(self, _: object) -> NoReturn:
         raise AttributeError(
             f"You can not assign a new value to user_data, see {_STORING_DATA_WIKI}"
+        )
+
+    @property
+    def conversation_data(self) -> Optional["ConversationData"]:
+        """:obj:`ContextTypes.conversation_data`: Optional. An object that can be used to keep any
+        data in. For each update from the same conversation it will be the same
+        :obj:`ContextTypes.conversation_data`.
+        Defaults to :obj:`dict`.
+
+        .. seealso:: :wiki:`Storing Bot, User and Chat Related Data\
+            <Storing-bot%2C-user-and-chat-related-data>`
+
+        .. versionadded:: NEXT.VERSION
+        """
+        if self._conversation_data:
+            return self._conversation_data
+
+        return None
+
+    @conversation_data.setter
+    def conversation_data(self, _: object) -> NoReturn:
+        raise AttributeError(
+            f"You can not assign a new value to conversation_data, see {_STORING_DATA_WIKI}"
         )
 
     async def refresh_data(self) -> None:
