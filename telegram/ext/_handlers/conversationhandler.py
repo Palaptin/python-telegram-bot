@@ -183,6 +183,7 @@ class PendingState:
     """
 
     __slots__ = (
+        "_original_conv_key",
         "application",
         "block",
         "context",
@@ -218,6 +219,7 @@ class PendingState:
         self.context = context
         self.application = application
         self.block = block
+        self._original_conv_key = conversation_data.key
 
         self.task.add_done_callback(lambda done: asyncio.create_task(self.await_new_state(done)))
 
@@ -231,6 +233,7 @@ class PendingState:
             block=self.block,
             application=self.application,
             handler=self.handler,
+            original_conv_key=self._original_conv_key,
         )
 
     def done(self) -> bool:
@@ -998,14 +1001,13 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         context: CCT,
         conversation_key: ConversationKey,
         current_conversation: ConversationData,
-        conversation_timeout: Optional[Union[float, datetime.timedelta]] = None,
         timeout_job_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Schedules a job which executes :meth:`_trigger_timeout` upon conversation timeout."""
         if new_state == self.END:
             return
 
-        timeout = conversation_timeout or self.conversation_timeout
+        timeout = current_conversation.timeout or self.conversation_timeout
         if timeout is None:
             return
 
@@ -1217,6 +1219,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             await self._update_state(
                 new_state=new_state,
                 conversation_data=current_conversation,
+                original_conv_key=conversation_key,
                 update=update,
                 context=context,
                 block=block,
@@ -1240,6 +1243,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         block: DVType[bool],
         application: "Application",
         handler: Optional[BaseHandler] = None,
+        original_conv_key: Optional[ConversationKey] = None,
     ) -> None:
         if isinstance(new_state, asyncio.Task):
             conversation_data.state = PendingState(
@@ -1310,6 +1314,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                         conversation_key=conversation_data.key,
                         current_conversation=conversation_data,
                     )
+
+        if original_conv_key and original_conv_key != conversation_data.key:
+            del self._conversations[conversation_data.key]
 
         self._conversations[conversation_data.key] = conversation_data
 
@@ -1409,6 +1416,5 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 context=context,
                 conversation_key=key,
                 current_conversation=conversation_data,
-                conversation_timeout=conversation_data.timeout,
                 timeout_job_kwargs={"misfire_grace_time": None},
             )
