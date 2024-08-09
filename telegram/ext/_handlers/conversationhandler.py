@@ -484,8 +484,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             handler is inactive more than this timeout (in seconds), it will be automatically
             ended. If this value is ``0`` or :obj:`None` (default), there will be no timeout. The
             last received update and the corresponding :class:`context <.CallbackContext>` will be
-            handled by *ALL* the handler's whose :meth:`check_update` method returns :obj:`True`
-            that are in the state :attr:`ConversationHandler.TIMEOUT`.
+            handled by the first handler  in the state :attr:`ConversationHandler.TIMEOUT` whose
+            :meth:`check_update` method returns :obj:`True`.
+
 
             Caution:
                 * This feature relies on the :attr:`telegram.ext.Application.job_queue` being set
@@ -1321,9 +1322,9 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self._conversations[conversation_data.key] = conversation_data
 
     async def _trigger_timeout(self, context: CCT) -> None:
-        """This is run whenever a conversation has timed out. Also makes sure that all handlers
-        which are in the :attr:`TIMEOUT` state and whose :meth:`BaseHandler.check_update` returns
-        :obj:`True` is handled.
+        """This is run whenever a conversation has timed out. Also makes sure that the first
+        matching handler which is in the :attr:`TIMEOUT` state and whose
+         :meth:`BaseHandler.check_update` returns :obj:`True` is handled.
         """
         job = cast("Job", context.job)
         ctxt = cast(_ConversationTimeoutContext, job.data)
@@ -1341,14 +1342,14 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 return
             del self.timeout_jobs[ctxt.conversation_key]
 
-        # Now run all handlers which are in TIMEOUT state
-        handlers = self.state_entry_handlers.get(self.TIMEOUT, [])
-        handlers.extend(self.states.get(self.TIMEOUT, []))
+        # Now run the first matching handler which is in TIMEOUT state
+        new_state: Optional[object] = None
+        handlers = self.states.get(self.TIMEOUT, [])
         for handler in handlers:
             check = handler.check_update(ctxt.update)
             if check is not None and check is not False:
                 try:
-                    await handler.handle_update(
+                    new_state = await handler.handle_update(
                         ctxt.update, ctxt.application, check, callback_context
                     )
                 except ApplicationHandlerStop:
@@ -1357,11 +1358,12 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                         "ConversationHandler has no effect. Ignoring.",
                         stacklevel=2,
                     )
+                break
 
         conversation_data = self._conversations[ctxt.conversation_key]
 
         await self._update_state(
-            new_state=self.END,
+            new_state=new_state if new_state is not None else self.END,
             conversation_data=conversation_data,
             update=ctxt.update,
             context=callback_context,
