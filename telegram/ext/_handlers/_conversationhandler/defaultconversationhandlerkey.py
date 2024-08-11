@@ -45,6 +45,8 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
     .. versionadded:: NEXT.VERSION
     """
 
+    __slots__ = ("_per_chat", "_per_message", "_per_user")
+
     def __init__(self, per_chat: bool = True, per_user: bool = True, per_message: bool = False):
         """
         Initialize the DefaultConversationHandlerKey with the given parameters.
@@ -112,9 +114,7 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
         key: List[Union[int, str]] = []
 
         if self.per_chat:
-            if not update.effective_chat or (
-                update.callback_query and not update.callback_query.message
-            ):
+            if not update.effective_chat:
                 return NotImplemented
             key.append(update.effective_chat.id)
 

@@ -54,11 +54,7 @@ class ConversationData(Generic[COD]):
 
     """
 
-    key: ConversationKey
-    state: object
-    timeout: Optional[Union[float, datetime.timedelta]]
-    json_update: str
-    conversation_context_data: COD
+    __slots__ = ("conversation_context_data", "json_update", "key", "state", "timeout")
 
     def __init__(
         self,
@@ -69,13 +65,14 @@ class ConversationData(Generic[COD]):
         conversation_context_data: Optional[COD] = None,
     ):
         if conversation_context_data is None:
-            self.conversation_context_data = {}  # type: ignore
+            self.conversation_context_data: COD = {}  # type: ignore
         else:
             self.conversation_context_data = conversation_context_data
 
-        self.key = key
-        self.state = state
-        self.timeout = timeout
+        self.key: ConversationKey = key
+        self.state: object = state
+        self.timeout: Optional[Union[float, datetime.timedelta]] = timeout
+        self.json_update: str = ""
         self.set_update(update)
 
     def set_update(self, update: Optional[Update]) -> None:
@@ -122,4 +119,5 @@ class ConversationData(Generic[COD]):
             "state": self.state,
             "timeout": self.timeout,
             "update": self.json_update if self.json_update != "" else None,
+            "conversation_context_data": self.conversation_context_data,
         }

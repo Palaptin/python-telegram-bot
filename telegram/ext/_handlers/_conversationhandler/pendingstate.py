@@ -53,9 +53,6 @@ class PendingState:
         "update",
     )
 
-    task: asyncio.Task
-    old_state: object
-
     def __init__(
         self,
         old_state: object,
@@ -84,7 +81,7 @@ class PendingState:
 
     async def await_new_state(self, _task: asyncio.Task) -> None:
         await self.conv_handler._update_state(  # pylint: disable=protected-access
-            new_state=self.resolve(),
+            new_state=self._resolve(),
             conversation_data=self.conversation_data,
             update=self.update,
             context=self.context,
@@ -94,12 +91,12 @@ class PendingState:
             original_conv_key=self._original_conv_key,
         )
 
-    def resolve(self) -> object:
+    def _resolve(self) -> object:
         """Returns the new state of the :class:`telegram.ext.ConversationHandler` if available.
         If there was an exception during the task execution, then return the old state.
-        Non-blocking entry-points with an exception will return `CH.END`. If both the new and old
-        state are :obj:`None`, return `CH.END`. If only the new state is :obj:`None`, return the
-        old state.
+        If both the new and old state are :obj:`None`, return `CH.END`. This means Non-blocking
+        entry-points with an exception will return `CH.END`.  If only the new state is :obj:`None`,
+        return the old state.
 
         Raises:
             :exc:`RuntimeError`: If the current task has not yet finished.
@@ -113,15 +110,18 @@ class PendingState:
 
         exc = self.task.exception()
         if exc:
+
+            # Special case if an error was raised in a non-blocking entry-point
+            if self.old_state is None:
+                _LOGGER.exception(
+                    "An non-blocking entry-point raised an exception. Ending Conversation."
+                )
+                return ConversationHandler.END
+
             _LOGGER.exception(
                 "Task function raised exception. Falling back to old state %s",
                 self.old_state,
             )
-
-            # Special case if an error was raised in a non-blocking entry-point
-            if self.old_state is None and exc:
-                return ConversationHandler.END
-
             return self.old_state
 
         result = self.task.result()
@@ -133,6 +133,3 @@ class PendingState:
             # returning None from a callback means that we want to stay in the old state
             return self.old_state
         return result
-
-    def done(self) -> bool:
-        return self.task.done()

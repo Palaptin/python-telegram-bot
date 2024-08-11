@@ -66,6 +66,16 @@ class ConversationStates(Generic[CCT]):
             Default is :obj:`False`.
     """
 
+    __slots__ = (
+        "_allow_reentry",
+        "_entry_points",
+        "_fallbacks",
+        "_map_to_parent",
+        "_pre_fallbacks",
+        "_state_entry_handlers",
+        "_states",
+    )
+
     def __init__(
         self,
         entry_points: List[BaseHandler[Update, CCT]],
@@ -95,22 +105,13 @@ class ConversationStates(Generic[CCT]):
 
         self._allow_reentry: bool = allow_reentry
 
-        all_handlers: List[BaseHandler[Update, CCT]] = []
-        all_handlers.extend(pre_fallbacks)
-        all_handlers.extend(entry_points)
-        all_handlers.extend(fallbacks)
-
-        for key, state_handlers in states.items():
-            all_handlers.extend(state_handlers)
+        for key in states:
             if key == ConversationHandler.END:
                 warn(
                     f"The END state ({key!r}) is reserved and shouldn't be used as a state name"
                     f" in the `ConversationHandler`.",
                     stacklevel=2,
                 )
-
-        for state_entry_handler in state_entry_handlers.values():
-            all_handlers.extend(state_entry_handler)
 
     def get_all_handlers(self) -> List[BaseHandler[Update, CCT]]:
         all_handlers: List[BaseHandler[Update, CCT]] = []
@@ -124,7 +125,7 @@ class ConversationStates(Generic[CCT]):
             all_handlers.extend(state_entry_handler)
         return all_handlers
 
-    def get_child_conversations(self) -> Set["ConversationHandler"]:
+    def get_child_conversations(self) -> Set[ConversationHandler]:
         child_conversations: Set[ConversationHandler] = set()
         child_conversations.update(
             handler

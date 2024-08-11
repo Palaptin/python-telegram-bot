@@ -599,21 +599,7 @@ class TestConversationHandler:
 
     @pytest.mark.parametrize(
         "attr",
-        [
-            "entry_points",
-            "states",
-            "state_entry_handlers",
-            "pre_fallbacks",
-            "fallbacks",
-            "per_chat",
-            "per_user",
-            "per_message",
-            "name",
-            "persistent",
-            "allow_reentry",
-            "conversation_timeout",
-            "map_to_parent",
-        ],
+        ["name", "persistent", "conversation_timeout"],
         indirect=False,
     )
     def test_immutable(self, attr):
@@ -1572,7 +1558,7 @@ class TestConversationHandler:
             assert caplog.records[0].name == "telegram.ext.PendingState"
             assert (
                 caplog.records[0].message
-                == "Task function raised exception. Falling back to old state None"
+                == "An non-blocking entry-point raised an exception. Ending Conversation."
             )
             assert caplog.records[0].exc_info[1] is None
 
