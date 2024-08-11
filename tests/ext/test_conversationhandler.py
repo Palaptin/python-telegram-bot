@@ -58,6 +58,10 @@ from telegram.ext import (
     TypeHandler,
     filters,
 )
+from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
+from telegram.ext._handlers._conversationhandler.defaultconversationhandlerkey import (
+    DefaultConversationHandlerKey,
+)
 from telegram.warnings import PTBUserWarning
 from tests.auxil.build_messages import make_command_message
 from tests.auxil.files import PROJECT_ROOT_PATH
@@ -276,7 +280,9 @@ class TestConversationHandler:
         return self._set_state(update, self.STOPPING)
 
     def test_slot_behaviour(self):
-        handler = ConversationHandler(entry_points=[], states={})
+        handler = ConversationHandler(
+            conversation_states=ConversationStates(entry_points=[], states={})
+        )
         for attr in handler.__slots__:
             assert getattr(handler, attr, "err") != "err", f"got extra slot '{attr}'"
         assert len(mro_slots(handler)) == len(set(mro_slots(handler))), "duplicate slot"
@@ -289,43 +295,50 @@ class TestConversationHandler:
         fallbacks = []
         map_to_parent = {}
         ch = ConversationHandler(
-            entry_points=entry_points,
-            states=states,
-            state_entry_handlers=state_entry_handlers,
-            pre_fallbacks=pre_fallbacks,
-            fallbacks=fallbacks,
-            per_chat="per_chat",
-            per_user="per_user",
-            per_message="per_message",
+            conversation_states=ConversationStates(
+                entry_points=entry_points,
+                states=states,
+                state_entry_handlers=state_entry_handlers,
+                pre_fallbacks=pre_fallbacks,
+                fallbacks=fallbacks,
+                map_to_parent=map_to_parent,
+                allow_reentry="allow_reentry",
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_chat="per_chat", per_user="per_user", per_message="per_message"
+            ),
             persistent="persistent",
             name="name",
-            allow_reentry="allow_reentry",
             conversation_timeout=42,
-            map_to_parent=map_to_parent,
         )
-        assert ch.entry_points is entry_points
-        assert ch.states is states
-        assert ch.state_entry_handlers is state_entry_handlers
-        assert ch.pre_fallbacks is pre_fallbacks
-        assert ch.fallbacks is fallbacks
-        assert ch.map_to_parent is map_to_parent
-        assert ch.per_chat == "per_chat"
-        assert ch.per_user == "per_user"
-        assert ch.per_message == "per_message"
+        assert ch.available_states.entry_points is entry_points
+        assert ch.available_states.states is states
+        assert ch.available_states.state_entry_handlers is state_entry_handlers
+        assert ch.available_states.pre_fallbacks is pre_fallbacks
+        assert ch.available_states.fallbacks is fallbacks
+        assert ch.available_states.map_to_parent is map_to_parent
+        assert ch.available_states.allow_reentry == "allow_reentry"
+        assert ch.key_builder.per_chat == "per_chat"
+        assert ch.key_builder.per_user == "per_user"
+        assert ch.key_builder.per_message == "per_message"
         assert ch.persistent == "persistent"
         assert ch.name == "name"
-        assert ch.allow_reentry == "allow_reentry"
 
     def test_init_persistent_no_name(self):
         with pytest.raises(ValueError, match="can't be persistent when handler is unnamed"):
-            ConversationHandler(self.entry_points, states=self.states, persistent=True)
+            ConversationHandler(
+                conversation_states=ConversationStates(self.entry_points, states=self.states),
+                persistent=True,
+            )
 
     def test_repr_no_truncation(self):
         # ConversationHandler's __repr__ is not inherited from BaseHandler.
         ch = ConversationHandler(
             name="test_handler",
-            entry_points=[],
-            states=self.drinking_states,
+            conversation_states=ConversationStates(
+                entry_points=[],
+                states=self.drinking_states,
+            ),
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
@@ -343,8 +356,10 @@ class TestConversationHandler:
 
         ch = ConversationHandler(
             name="test_handler",
-            entry_points=[],
-            states=states,
+            conversation_states=ConversationStates(
+                entry_points=[],
+                states=states,
+            ),
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
@@ -356,7 +371,11 @@ class TestConversationHandler:
     async def test_check_update_returns_non(self, app, user1):
         """checks some cases where updates should not be handled"""
         conv_handler = ConversationHandler(
-            entry_points=[], states={}, fallbacks=[], per_message=True, per_chat=True
+            conversation_states=ConversationStates(entry_points=[], states={}, fallbacks=[]),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+                per_chat=True,
+            ),
         )
         assert not conv_handler.check_update("not an Update")
         assert not conv_handler.check_update(Update(0))
@@ -381,90 +400,116 @@ class TestConversationHandler:
         # which should all generate a warning no matter the per_* setting. TypeHandler should
         # not when the class is Update
         ConversationHandler(
-            entry_points=[StringCommandHandler("code", self.code)],
-            states={
-                self.BREWING: [
-                    StringRegexHandler("code", self.code),
-                    PollHandler(self.code),
-                    TypeHandler(NotUpdate, self.code),
-                ],
-            },
-            fallbacks=[TypeHandler(Update, self.code)],
+            conversation_states=ConversationStates(
+                entry_points=[StringCommandHandler("code", self.code)],
+                states={
+                    self.BREWING: [
+                        StringRegexHandler("code", self.code),
+                        PollHandler(self.code),
+                        TypeHandler(NotUpdate, self.code),
+                    ],
+                },
+                fallbacks=[TypeHandler(Update, self.code)],
+            )
         )
 
         # these handlers should all raise a warning when per_chat is True
         ConversationHandler(
-            entry_points=[ShippingQueryHandler(self.code)],
-            states={
-                self.BREWING: [
-                    InlineQueryHandler(self.code),
-                    PreCheckoutQueryHandler(self.code),
-                    PollAnswerHandler(self.code),
-                ],
-            },
-            fallbacks=[ChosenInlineResultHandler(self.code)],
-            per_chat=True,
+            conversation_states=ConversationStates(
+                entry_points=[ShippingQueryHandler(self.code)],
+                states={
+                    self.BREWING: [
+                        InlineQueryHandler(self.code),
+                        PreCheckoutQueryHandler(self.code),
+                        PollAnswerHandler(self.code),
+                    ],
+                },
+                fallbacks=[ChosenInlineResultHandler(self.code)],
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_chat=True,
+            ),
         )
 
         # the CallbackQueryHandler should *not* raise when per_message is True,
         # but any other one should
         ConversationHandler(
-            entry_points=[CallbackQueryHandler(self.code)],
-            states={
-                self.BREWING: [CommandHandler("code", self.code)],
-            },
-            fallbacks=[CallbackQueryHandler(self.code)],
-            per_message=True,
+            conversation_states=ConversationStates(
+                entry_points=[CallbackQueryHandler(self.code)],
+                states={
+                    self.BREWING: [CommandHandler("code", self.code)],
+                },
+                fallbacks=[CallbackQueryHandler(self.code)],
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+            ),
         )
 
         # the CallbackQueryHandler should raise when per_message is False
         ConversationHandler(
-            entry_points=[CommandHandler("code", self.code)],
-            states={
-                self.BREWING: [CommandHandler("code", self.code)],
-            },
-            fallbacks=[CallbackQueryHandler(self.code)],
-            per_message=False,
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("code", self.code)],
+                states={
+                    self.BREWING: [CommandHandler("code", self.code)],
+                },
+                fallbacks=[CallbackQueryHandler(self.code)],
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=False,
+            ),
         )
 
         # adding a nested conv to a conversation with timeout should warn
         child = ConversationHandler(
-            entry_points=[CommandHandler("code", self.code)],
-            states={
-                self.BREWING: [CommandHandler("code", self.code)],
-            },
-            fallbacks=[CommandHandler("code", self.code)],
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("code", self.code)],
+                states={
+                    self.BREWING: [CommandHandler("code", self.code)],
+                },
+                fallbacks=[CommandHandler("code", self.code)],
+            )
         )
 
         ConversationHandler(
-            entry_points=[CommandHandler("code", self.code)],
-            states={
-                self.BREWING: [child],
-            },
-            fallbacks=[CommandHandler("code", self.code)],
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("code", self.code)],
+                states={
+                    self.BREWING: [child],
+                },
+                fallbacks=[CommandHandler("code", self.code)],
+            ),
             conversation_timeout=42,
         )
 
         # If per_message is True, per_chat should also be True, since msg ids are not unique
         ConversationHandler(
-            entry_points=[CallbackQueryHandler(self.code, "code")],
-            states={
-                self.BREWING: [CallbackQueryHandler(self.code, "code")],
-            },
-            fallbacks=[CallbackQueryHandler(self.code, "code")],
-            per_message=True,
-            per_chat=False,
+            conversation_states=ConversationStates(
+                entry_points=[CallbackQueryHandler(self.code, "code")],
+                states={
+                    self.BREWING: [CallbackQueryHandler(self.code, "code")],
+                },
+                fallbacks=[CallbackQueryHandler(self.code, "code")],
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+                per_chat=False,
+            ),
         )
 
         # If state is END (-1) we also issue a warning
         ConversationHandler(
-            entry_points=[CallbackQueryHandler(self.code, "code")],
-            states={
-                self.END: [CallbackQueryHandler(self.code, "code")],
-            },
-            fallbacks=[CallbackQueryHandler(self.code, "code")],
-            per_message=True,
-            per_chat=True,
+            conversation_states=ConversationStates(
+                entry_points=[CallbackQueryHandler(self.code, "code")],
+                states={
+                    self.END: [CallbackQueryHandler(self.code, "code")],
+                },
+                fallbacks=[CallbackQueryHandler(self.code, "code")],
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+                per_chat=True,
+            ),
         )
 
         # the overall number of handlers throwing a warning is 13
@@ -572,7 +617,9 @@ class TestConversationHandler:
         indirect=False,
     )
     def test_immutable(self, attr):
-        ch = ConversationHandler(entry_points=[], states={})
+        ch = ConversationHandler(
+            conversation_states=ConversationStates(entry_points=[], states={})
+        )
         print(attr)
         with pytest.raises(AttributeError, match=f"You can not assign a new value to {attr}"):
             setattr(ch, attr, True)
@@ -580,20 +627,26 @@ class TestConversationHandler:
     def test_per_all_false(self):
         with pytest.raises(ValueError, match="can't all be 'False'"):
             ConversationHandler(
-                entry_points=[],
-                states={},
-                per_chat=False,
-                per_user=False,
-                per_message=False,
+                conversation_states=ConversationStates(
+                    entry_points=[],
+                    states={},
+                ),
+                key_builder=DefaultConversationHandlerKey(
+                    per_chat=False,
+                    per_user=False,
+                    per_message=False,
+                ),
             )
 
     @pytest.mark.parametrize("raise_ahs", [True, False])
     async def test_basic_and_app_handler_stop(self, app, bot, user1, user2, raise_ahs):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
 
@@ -653,10 +706,12 @@ class TestConversationHandler:
 
     async def test_conversation_handler_end(self, caplog, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
         )
         app.add_handler(handler)
 
@@ -704,11 +759,13 @@ class TestConversationHandler:
         states[self.THIRSTY].append(CommandHandler("end", self.end))
 
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=states,
-            state_entry_handlers=self.state_entry_handlers,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=states,
+                state_entry_handlers=self.state_entry_handlers,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
 
@@ -773,7 +830,12 @@ class TestConversationHandler:
             assert recwarn[0].category is PTBUserWarning
             assert (
                 Path(recwarn[0].filename)
-                == PROJECT_ROOT_PATH / "telegram" / "ext" / "_handlers" / "conversationhandler.py"
+                == PROJECT_ROOT_PATH
+                / "telegram"
+                / "ext"
+                / "_handlers"
+                / "_conversationhandler"
+                / "conversationhandler.py"
             ), "wrong stacklevel!"
             assert (
                 str(recwarn[0].message)
@@ -785,10 +847,12 @@ class TestConversationHandler:
 
     async def test_conversation_handler_fallback(self, app, bot, user1, user2):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
 
@@ -834,10 +898,12 @@ class TestConversationHandler:
         states[self.BREWING].append(CommandHandler("fix_prod", self.start))
 
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
 
@@ -887,13 +953,15 @@ class TestConversationHandler:
             return callback
 
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", build_callback(1))],
-            states={
-                1: [TypeHandler(Update, build_callback(69))],
-                2: [TypeHandler(Update, build_callback(42))],
-            },
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", build_callback(1))],
+                states={
+                    1: [TypeHandler(Update, build_callback(69))],
+                    2: [TypeHandler(Update, build_callback(42))],
+                },
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             name="xyz",
         )
         app.add_handler(handler)
@@ -921,7 +989,12 @@ class TestConversationHandler:
             assert recwarn[0].category is PTBUserWarning
             assert (
                 Path(recwarn[0].filename)
-                == PROJECT_ROOT_PATH / "telegram" / "ext" / "_handlers" / "conversationhandler.py"
+                == PROJECT_ROOT_PATH
+                / "telegram"
+                / "ext"
+                / "_handlers"
+                / "_conversationhandler"
+                / "conversationhandler.py"
             ), "wrong stacklevel!"
             assert (
                 str(recwarn[0].message)
@@ -930,11 +1003,15 @@ class TestConversationHandler:
 
     async def test_conversation_handler_per_chat(self, app, bot, user1, user2):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
-            per_user=False,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_user=False,
+            ),
         )
         app.add_handler(handler)
 
@@ -979,11 +1056,15 @@ class TestConversationHandler:
 
     async def test_conversation_handler_per_user(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
-            per_chat=False,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_chat=False,
+            ),
         )
         app.add_handler(handler)
 
@@ -1044,13 +1125,17 @@ class TestConversationHandler:
             return ConversationHandler.END
 
         handler = ConversationHandler(
-            entry_points=[CallbackQueryHandler(entry)],
-            states={
-                1: [CallbackQueryHandler(one, pattern="^1$")],
-                2: [CallbackQueryHandler(two, pattern="^2$")],
-            },
-            per_message=True,
-            per_chat=not inline,
+            conversation_states=ConversationStates(
+                entry_points=[CallbackQueryHandler(entry)],
+                states={
+                    1: [CallbackQueryHandler(one, pattern="^1$")],
+                    2: [CallbackQueryHandler(two, pattern="^2$")],
+                },
+            ),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+                per_chat=not inline,
+            ),
         )
         app.add_handler(handler)
 
@@ -1108,7 +1193,9 @@ class TestConversationHandler:
 
     async def test_end_on_first_message(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", self.start_end)], states={}
+            )
         )
         app.add_handler(handler)
 
@@ -1132,8 +1219,10 @@ class TestConversationHandler:
 
     async def test_end_on_first_message_non_blocking_handler(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", callback=self.start_end, block=False)],
-            states={},
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", callback=self.start_end, block=False)],
+                states={},
+            )
         )
         app.add_handler(handler)
 
@@ -1165,7 +1254,9 @@ class TestConversationHandler:
 
     async def test_none_on_first_message(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, self.start_none)], states={}
+            conversation_states=ConversationStates(
+                entry_points=[MessageHandler(filters.ALL, self.start_none)], states={}
+            )
         )
         app.add_handler(handler)
 
@@ -1181,8 +1272,10 @@ class TestConversationHandler:
 
     async def test_none_on_first_message_non_blocking_handler(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_none, block=False)],
-            states={},
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", self.start_none, block=False)],
+                states={},
+            )
         )
         app.add_handler(handler)
 
@@ -1213,7 +1306,9 @@ class TestConversationHandler:
 
     async def test_per_chat_message_without_chat(self, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", self.start_end)], states={}
+            )
         )
         cbq = CallbackQuery(0, user1, None, None)
         cbq.set_bot(bot)
@@ -1222,7 +1317,9 @@ class TestConversationHandler:
 
     async def test_channel_message_without_chat(self, bot):
         handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, self.start_end)], states={}
+            conversation_states=ConversationStates(
+                entry_points=[MessageHandler(filters.ALL, self.start_end)], states={}
+            )
         )
         message = Message(0, date=None, chat=Chat(0, Chat.CHANNEL, "Misses Test"))
         message.set_bot(bot)
@@ -1236,7 +1333,9 @@ class TestConversationHandler:
 
     async def test_all_update_types(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end)], states={}
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", self.start_end)], states={}
+            )
         )
         message = Message(0, None, self.group, from_user=user1, text="ignore")
         message.set_bot(bot)
@@ -1261,10 +1360,12 @@ class TestConversationHandler:
     @pytest.mark.parametrize("jq", [True, False])
     async def test_no_running_job_queue_warning(self, app, bot, user1, recwarn, jq):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         if not jq:
@@ -1305,6 +1406,7 @@ class TestConversationHandler:
                     / "telegram"
                     / "ext"
                     / "_handlers"
+                    / "_conversationhandler"
                     / "conversationhandler.py"
                 ), "wrong stacklevel!"
             # now set app.job_queue back to it's original value
@@ -1319,10 +1421,12 @@ class TestConversationHandler:
         app = ApplicationBuilder().token(bot.token).job_queue(DictJB()).build()
         monkeypatch.setattr(app.job_queue, "run_once", mocked_run_once)
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=100,
         )
         app.add_handler(handler)
@@ -1374,10 +1478,12 @@ class TestConversationHandler:
             return
 
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", conv_entry)],
-            states={1: [MessageHandler(filters.Text(["error"]), raise_error)]},
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", conv_entry)],
+                states={1: [MessageHandler(filters.Text(["error"]), raise_error)]},
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             block=False,
         )
         app.add_handler(handler)
@@ -1409,7 +1515,7 @@ class TestConversationHandler:
                 assert handler.check_update(Update(0, message=message))
             if test_type == "exception":
                 assert len(caplog.records) == 1
-                assert caplog.records[0].name == "telegram.ext.ConversationHandler"
+                assert caplog.records[0].name == "telegram.ext.PendingState"
                 assert (
                     caplog.records[0].message
                     == "Task function raised exception. Falling back to old state 1"
@@ -1431,10 +1537,12 @@ class TestConversationHandler:
             return
 
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", raise_error, block=False)],
-            states={},
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", raise_error, block=False)],
+                states={},
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
         app.add_error_handler(error_handler)
@@ -1461,7 +1569,7 @@ class TestConversationHandler:
             # This also makes sure that we're still in the same state
             assert handler.check_update(Update(0, message=message))
             assert len(caplog.records) == 1
-            assert caplog.records[0].name == "telegram.ext.ConversationHandler"
+            assert caplog.records[0].name == "telegram.ext.PendingState"
             assert (
                 caplog.records[0].message
                 == "Task function raised exception. Falling back to old state None"
@@ -1470,10 +1578,12 @@ class TestConversationHandler:
 
     async def test_conversation_timeout(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1541,10 +1651,12 @@ class TestConversationHandler:
 
         self.states.update({ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout)]})
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
             block=False,
         )
@@ -1584,10 +1696,12 @@ class TestConversationHandler:
 
     async def test_conversation_timeout_application_handler_stop(self, app, bot, user1, recwarn):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
 
@@ -1679,10 +1793,12 @@ class TestConversationHandler:
         timeout_handler = CommandHandler("start", timeout_callback)
         states.update({ConversationHandler.TIMEOUT: [timeout_handler]})
         handler = ConversationHandler(
-            entry_points=[CommandHandler("start", start_callback)],
-            states=states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", start_callback)],
+                states=states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1701,10 +1817,12 @@ class TestConversationHandler:
     @pytest.mark.flaky(3, 1)
     async def test_conversation_timeout_keeps_extending(self, app, bot, user1):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1761,10 +1879,12 @@ class TestConversationHandler:
 
     async def test_conversation_timeout_two_users(self, app, bot, user1, user2):
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1824,10 +1944,12 @@ class TestConversationHandler:
             }
         )
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1900,10 +2022,12 @@ class TestConversationHandler:
             }
         )
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -1985,10 +2109,12 @@ class TestConversationHandler:
         states.update({ConversationHandler.TIMEOUT: [MessageHandler(None, self.passout2)]})
 
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(handler)
@@ -2033,17 +2159,21 @@ class TestConversationHandler:
     async def test_nested_conversation_handler(self, app, bot, user1, user2):
         self.nested_states[self.DRINKING] = [
             ConversationHandler(
-                entry_points=self.drinking_entry_points,
-                states=self.drinking_states,
-                fallbacks=self.drinking_fallbacks,
-                map_to_parent=self.drinking_map_to_parent,
+                conversation_states=ConversationStates(
+                    entry_points=self.drinking_entry_points,
+                    states=self.drinking_states,
+                    fallbacks=self.drinking_fallbacks,
+                    map_to_parent=self.drinking_map_to_parent,
+                )
             )
         ]
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.nested_states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.nested_states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
         app.add_handler(handler)
 
@@ -2160,17 +2290,21 @@ class TestConversationHandler:
     async def test_nested_conversation_application_handler_stop(self, app, bot, user1, user2):
         self.nested_states[self.DRINKING] = [
             ConversationHandler(
-                entry_points=self.drinking_entry_points,
-                states=self.drinking_states,
-                fallbacks=self.drinking_fallbacks,
-                map_to_parent=self.drinking_map_to_parent,
+                conversation_states=ConversationStates(
+                    entry_points=self.drinking_entry_points,
+                    states=self.drinking_states,
+                    fallbacks=self.drinking_fallbacks,
+                    map_to_parent=self.drinking_map_to_parent,
+                )
             )
         ]
         handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.nested_states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.nested_states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            )
         )
 
         def test_callback(u, c):
@@ -2318,11 +2452,13 @@ class TestConversationHandler:
             return 1
 
         conv_handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, callback=callback, block=False)],
-            states={
-                ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)],
-                1: [TypeHandler(Update, callback)],
-            },
+            conversation_states=ConversationStates(
+                entry_points=[MessageHandler(filters.ALL, callback=callback, block=False)],
+                states={
+                    ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)],
+                    1: [TypeHandler(Update, callback)],
+                },
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(conv_handler)
@@ -2351,8 +2487,10 @@ class TestConversationHandler:
 
     async def test_no_timeout_on_end(self, app, user1):
         conv_handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, callback=self.start_end)],
-            states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
+            conversation_states=ConversationStates(
+                entry_points=[MessageHandler(filters.ALL, callback=self.start_end)],
+                states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
+            ),
             conversation_timeout=0.5,
         )
         app.add_handler(conv_handler)
@@ -2377,29 +2515,37 @@ class TestConversationHandler:
     async def test_conversation_handler_block_dont_override(self, app):
         """This just makes sure that we don't change any attributes of the handlers of the conv"""
         conv_handler = ConversationHandler(
-            entry_points=self.entry_points,
-            states=self.states,
-            pre_fallbacks=self.pre_fallbacks,
-            fallbacks=self.fallbacks,
+            conversation_states=ConversationStates(
+                entry_points=self.entry_points,
+                states=self.states,
+                pre_fallbacks=self.pre_fallbacks,
+                fallbacks=self.fallbacks,
+            ),
             block=False,
         )
 
-        all_handlers = conv_handler.entry_points + conv_handler.fallbacks
-        for state_handlers in conv_handler.states.values():
+        all_handlers = (
+            conv_handler.available_states.entry_points + conv_handler.available_states.fallbacks
+        )
+        for state_handlers in conv_handler.available_states.states.values():
             all_handlers += state_handlers
 
         for handler in all_handlers:
             assert handler.block
 
         conv_handler = ConversationHandler(
-            entry_points=[CommandHandler("start", self.start_end, block=False)],
-            states={1: [CommandHandler("start", self.start_end, block=False)]},
-            fallbacks=[CommandHandler("start", self.start_end, block=False)],
+            conversation_states=ConversationStates(
+                entry_points=[CommandHandler("start", self.start_end, block=False)],
+                states={1: [CommandHandler("start", self.start_end, block=False)]},
+                fallbacks=[CommandHandler("start", self.start_end, block=False)],
+            ),
             block=True,
         )
 
-        all_handlers = conv_handler.entry_points + conv_handler.fallbacks
-        for state_handlers in conv_handler.states.values():
+        all_handlers = (
+            conv_handler.available_states.entry_points + conv_handler.available_states.fallbacks
+        )
+        for state_handlers in conv_handler.available_states.states.values():
             all_handlers += state_handlers
 
         for handler in all_handlers:
@@ -2431,16 +2577,20 @@ class TestConversationHandler:
 
         if ch_block is not None:
             conv_handler = ConversationHandler(
-                entry_points=[handler],
-                states={1: [handler]},
-                fallbacks=[fallback],
+                conversation_states=ConversationStates(
+                    entry_points=[handler],
+                    states={1: [handler]},
+                    fallbacks=[fallback],
+                ),
                 block=ch_block,
             )
         else:
             conv_handler = ConversationHandler(
-                entry_points=[handler],
-                states={1: [handler]},
-                fallbacks=[fallback],
+                conversation_states=ConversationStates(
+                    entry_points=[handler],
+                    states={1: [handler]},
+                    fallbacks=[fallback],
+                )
             )
 
         bot = make_bot(bot_info, defaults=defaults) if ext_bot else PytestBot(bot_info["token"])
@@ -2507,14 +2657,16 @@ class TestConversationHandler:
             return 1
 
         conv_handler = ConversationHandler(
-            entry_points=[MessageHandler(filters.ALL, callback=blocking, block=False)],
-            states={
-                ConversationHandler.WAITING: [
-                    MessageHandler(filters.Regex("1"), callback_1),
-                    MessageHandler(filters.Regex("2"), callback_2),
-                ],
-                1: [MessageHandler(filters.Regex("2"), callback_3)],
-            },
+            conversation_states=ConversationStates(
+                entry_points=[MessageHandler(filters.ALL, callback=blocking, block=False)],
+                states={
+                    ConversationHandler.WAITING: [
+                        MessageHandler(filters.Regex("1"), callback_1),
+                        MessageHandler(filters.Regex("2"), callback_2),
+                    ],
+                    1: [MessageHandler(filters.Regex("2"), callback_3)],
+                },
+            ),
         )
         app.add_handler(conv_handler)
 

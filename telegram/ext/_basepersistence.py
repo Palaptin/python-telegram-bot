@@ -25,7 +25,7 @@ from telegram.ext._extbot import ExtBot
 from telegram.ext._utils.types import BD, CD, UD, CDCData, ConversationDict
 
 if TYPE_CHECKING:
-    from telegram.ext._handlers.conversationhandler import ConversationData
+    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 
 
 class PersistenceInput(NamedTuple):

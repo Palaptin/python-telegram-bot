@@ -38,7 +38,11 @@ __all__ = (
     "ChosenInlineResultHandler",
     "CommandHandler",
     "ContextTypes",
+    "ConversationData",
     "ConversationHandler",
+    "ConversationHandlerKey",
+    "ConversationStates",
+    "DefaultConversationHandlerKey",
     "Defaults",
     "DictPersistence",
     "ExtBot",
@@ -62,7 +66,6 @@ __all__ = (
     "Updater",
     "filters",
 )
-
 from . import filters
 from ._aioratelimiter import AIORateLimiter
 from ._application import Application, ApplicationHandlerStop
@@ -76,6 +79,13 @@ from ._contexttypes import ContextTypes
 from ._defaults import Defaults
 from ._dictpersistence import DictPersistence
 from ._extbot import ExtBot
+from ._handlers._conversationhandler.conversationdata import ConversationData
+from ._handlers._conversationhandler.conversationhandler import ConversationHandler
+from ._handlers._conversationhandler.conversationhandlerkey import ConversationHandlerKey
+from ._handlers._conversationhandler.conversationstates import ConversationStates
+from ._handlers._conversationhandler.defaultconversationhandlerkey import (
+    DefaultConversationHandlerKey,
+)
 from ._handlers.basehandler import BaseHandler
 from ._handlers.businessconnectionhandler import BusinessConnectionHandler
 from ._handlers.businessmessagesdeletedhandler import BusinessMessagesDeletedHandler
@@ -85,7 +95,6 @@ from ._handlers.chatjoinrequesthandler import ChatJoinRequestHandler
 from ._handlers.chatmemberhandler import ChatMemberHandler
 from ._handlers.choseninlineresulthandler import ChosenInlineResultHandler
 from ._handlers.commandhandler import CommandHandler
-from ._handlers.conversationhandler import ConversationHandler
 from ._handlers.inlinequeryhandler import InlineQueryHandler
 from ._handlers.messagehandler import MessageHandler
 from ._handlers.messagereactionhandler import MessageReactionHandler

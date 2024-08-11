@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from asyncio import Future, Queue
 
     from telegram.ext import Application, Job, JobQueue
-    from telegram.ext._handlers.conversationhandler import ConversationData
+    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
     from telegram.ext._utils.types import CCT
 
 _STORING_DATA_WIKI = (

@@ -43,7 +43,8 @@ from telegram.ext import (
     PersistenceInput,
     filters,
 )
-from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
 from telegram.warnings import PTBUserWarning
 from tests.auxil.build_messages import make_message_update
 from tests.auxil.pytest_classes import PytestApplication, make_bot
@@ -207,8 +208,11 @@ class TrackingConversationHandler(ConversationHandler):
         states = {state.value: [self.build_handler(state)] for state in HandlerStates}
         # remove the end state since it is not used and triggers a warning
         del states[HandlerStates.END]
-        entry_points = [self.build_handler(HandlerStates.END)]
-        super().__init__(*args, **kwargs, states=states, entry_points=entry_points)
+        conversation_states = ConversationStates(
+            entry_points=[self.build_handler(HandlerStates.END)],
+            states=states,
+        )
+        super().__init__(*args, **kwargs, conversation_states=conversation_states)
 
     @staticmethod
     async def callback(update, context, state):
@@ -1243,10 +1247,12 @@ class TestBasePersistence:
             return HandlerStates.STATE_1
 
         conversation = ConversationHandler(
-            entry_points=[
-                TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
-            ],
-            states={HandlerStates.STATE_1: []},
+            conversation_states=ConversationStates(
+                entry_points=[
+                    TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
+                ],
+                states={HandlerStates.STATE_1: []},
+            ),
             persistent=True,
             name="conv",
             block=False,
@@ -1312,7 +1318,7 @@ class TestBasePersistence:
         async def callback_2(_, __):
             raise Exception("Test Exception")
 
-        conversation = ConversationHandler(
+        conversation_states = ConversationStates(
             entry_points=[
                 TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback_1)
             ],
@@ -1323,6 +1329,9 @@ class TestBasePersistence:
                     )
                 ]
             },
+        )
+        conversation = ConversationHandler(
+            conversation_states=conversation_states,
             persistent=True,
             name="conv",
             block=False,
@@ -1368,10 +1377,12 @@ class TestBasePersistence:
             return HandlerStates.STATE_1
 
         conversation = ConversationHandler(
-            entry_points=[
-                TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
-            ],
-            states={HandlerStates.STATE_1: []},
+            conversation_states=ConversationStates(
+                entry_points=[
+                    TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
+                ],
+                states={HandlerStates.STATE_1: []},
+            ),
             persistent=True,
             name="conv",
             block=False,
@@ -1409,10 +1420,12 @@ class TestBasePersistence:
             return HandlerStates.STATE_1
 
         conversation = ConversationHandler(
-            entry_points=[
-                TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
-            ],
-            states={},
+            conversation_states=ConversationStates(
+                entry_points=[
+                    TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
+                ],
+                states={},
+            ),
             persistent=True,
             name="conv",
             block=False,
@@ -1470,10 +1483,12 @@ class TestBasePersistence:
             return HandlerStates.END
 
         conversation = ConversationHandler(
-            entry_points=[
-                TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
-            ],
-            states={},
+            conversation_states=ConversationStates(
+                entry_points=[
+                    TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
+                ],
+                states={},
+            ),
             persistent=True,
             name="conv",
             block=False,
@@ -1527,10 +1542,12 @@ class TestBasePersistence:
             return HandlerStates.STATE_1
 
         conversation = ConversationHandler(
-            entry_points=[
-                TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
-            ],
-            states={HandlerStates.STATE_1: []},
+            conversation_states=ConversationStates(
+                entry_points=[
+                    TrackingConversationHandler.build_handler(HandlerStates.END, callback=callback)
+                ],
+                states={HandlerStates.STATE_1: []},
+            ),
             persistent=True,
             name="conv",
             conversation_timeout=3,
@@ -1579,42 +1596,48 @@ class TestBasePersistence:
             return callback
 
         grand_child = ConversationHandler(
-            entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
-            states={
-                HandlerStates.STATE_1: [
-                    TrackingConversationHandler.build_handler(
-                        HandlerStates.STATE_1, callback=build_callback(HandlerStates.END)
-                    )
-                ]
-            },
+            conversation_states=ConversationStates(
+                entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
+                states={
+                    HandlerStates.STATE_1: [
+                        TrackingConversationHandler.build_handler(
+                            HandlerStates.STATE_1, callback=build_callback(HandlerStates.END)
+                        )
+                    ]
+                },
+                map_to_parent={HandlerStates.END: HandlerStates.STATE_2},
+            ),
             persistent=True,
             name="grand_child",
-            map_to_parent={HandlerStates.END: HandlerStates.STATE_2},
         )
 
         child = ConversationHandler(
-            entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
-            states={
-                HandlerStates.STATE_1: [grand_child],
-                HandlerStates.STATE_2: [
-                    TrackingConversationHandler.build_handler(HandlerStates.STATE_2)
-                ],
-            },
+            conversation_states=ConversationStates(
+                entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
+                states={
+                    HandlerStates.STATE_1: [grand_child],
+                    HandlerStates.STATE_2: [
+                        TrackingConversationHandler.build_handler(HandlerStates.STATE_2)
+                    ],
+                },
+                map_to_parent={HandlerStates.STATE_3: HandlerStates.STATE_2},
+            ),
             persistent=True,
             name="child",
-            map_to_parent={HandlerStates.STATE_3: HandlerStates.STATE_2},
         )
 
         parent = ConversationHandler(
-            entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
-            states={
-                HandlerStates.STATE_1: [child],
-                HandlerStates.STATE_2: [
-                    TrackingConversationHandler.build_handler(
-                        HandlerStates.STATE_2, callback=build_callback(HandlerStates.END)
-                    )
-                ],
-            },
+            conversation_states=ConversationStates(
+                entry_points=[TrackingConversationHandler.build_handler(HandlerStates.END)],
+                states={
+                    HandlerStates.STATE_1: [child],
+                    HandlerStates.STATE_2: [
+                        TrackingConversationHandler.build_handler(
+                            HandlerStates.STATE_2, callback=build_callback(HandlerStates.END)
+                        )
+                    ],
+                },
+            ),
             persistent=True,
             name="parent",
         )

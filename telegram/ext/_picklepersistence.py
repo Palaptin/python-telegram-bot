@@ -27,7 +27,7 @@ from telegram._utils.types import FilePathInput
 from telegram._utils.warnings import warn
 from telegram.ext import BasePersistence, PersistenceInput
 from telegram.ext._contexttypes import ContextTypes
-from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 from telegram.ext._utils.types import BD, CD, UD, CDCData, ConversationDict
 
 _REPLACED_KNOWN_BOT = "a known bot replaced by PTB's PicklePersistence"

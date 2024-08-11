@@ -81,7 +81,7 @@ if TYPE_CHECKING:
     from telegram.ext import ConversationHandler, JobQueue
     from telegram.ext._applicationbuilder import InitApplicationBuilder
     from telegram.ext._baseupdateprocessor import BaseUpdateProcessor
-    from telegram.ext._handlers.conversationhandler import ConversationData
+    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
     from telegram.ext._jobqueue import Job
 
 DEFAULT_GROUP: int = 0
@@ -515,7 +515,9 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
 
         # Unfortunately due to circular imports this has to be here
         # pylint: disable=import-outside-toplevel
-        from telegram.ext._handlers.conversationhandler import ConversationHandler
+        from telegram.ext._handlers._conversationhandler.conversationhandler import (
+            ConversationHandler,
+        )
 
         # Initialize the persistent conversation handlers with the stored states
         for handler in itertools.chain.from_iterable(self.handlers.values()):
@@ -1388,7 +1390,9 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
         """
         # Unfortunately due to circular imports this has to be here
         # pylint: disable=import-outside-toplevel
-        from telegram.ext._handlers.conversationhandler import ConversationHandler
+        from telegram.ext._handlers._conversationhandler.conversationhandler import (
+            ConversationHandler,
+        )
 
         if not isinstance(handler, BaseHandler):
             raise TypeError(f"handler is not an instance of {BaseHandler.__name__}")
@@ -1738,7 +1742,7 @@ class Application(Generic[BT, CCT, UD, CD, BD, JQ], AsyncContextManager["Applica
 
         # Unfortunately due to circular imports this has to be here
         # pylint: disable=import-outside-toplevel
-        from telegram.ext._handlers.conversationhandler import (
+        from telegram.ext._handlers._conversationhandler.conversationhandler import (
             ConversationData,
             ConversationHandler,
             PendingState,

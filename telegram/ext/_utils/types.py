@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from telegram import Bot
     from telegram.ext import BaseRateLimiter, CallbackContext, JobQueue
-    from telegram.ext._handlers.conversationhandler import ConversationData
+    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 
 CCT = TypeVar("CCT", bound="CallbackContext[Any, Any, Any, Any]")
 """An instance of :class:`telegram.ext.CallbackContext` or a custom subclass.

@@ -21,7 +21,7 @@ import json
 import pytest
 
 from telegram.ext import DictPersistence
-from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 from tests.auxil.slots import mro_slots
 
 

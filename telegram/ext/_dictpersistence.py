@@ -22,7 +22,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 from telegram.ext import BasePersistence, PersistenceInput
-from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 from telegram.ext._utils.types import CDCData, ConversationDict
 
 if TYPE_CHECKING:

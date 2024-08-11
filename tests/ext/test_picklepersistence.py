@@ -27,7 +27,7 @@ import pytest
 
 from telegram import Chat, Message, TelegramObject, Update, User
 from telegram.ext import ContextTypes, PersistenceInput, PicklePersistence
-from telegram.ext._handlers.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 from telegram.ext._picklepersistence import _BotUnpickler
 from telegram.warnings import PTBUserWarning
 from tests.auxil.files import PROJECT_ROOT_PATH
