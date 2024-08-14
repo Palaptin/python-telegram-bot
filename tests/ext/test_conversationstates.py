@@ -16,7 +16,6 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-from unittest.mock import Mock
 
 import pytest
 from _pytest.recwarn import WarningsRecorder
@@ -26,6 +25,12 @@ from tests.auxil.slots import mro_slots
 
 
 class TestConversationStates:
+
+    @staticmethod
+    def get_conversation_handler() -> ConversationHandler:
+        return ConversationHandler(
+            conversation_states=ConversationStates(entry_points=[], states={})
+        )
 
     def test_slot_behaviour(self) -> None:
         conversation_states: ConversationStates = ConversationStates(entry_points=[], states={})
@@ -38,7 +43,7 @@ class TestConversationStates:
     def test_init(self, recwarn: WarningsRecorder) -> None:
 
         entry_points: list = []
-        states: dict = {ConversationHandler.END: Mock(spec=ConversationHandler)}
+        states: dict = {ConversationHandler.END: self.get_conversation_handler()}
         state_entry_handlers: dict = {}
         pre_fallbacks: list = []
         fallbacks: list = []
@@ -101,11 +106,11 @@ class TestConversationStates:
 
     def test_get_all_handlers(self) -> None:
 
-        entry_points: list = [Mock(spec=ConversationHandler)]
-        states: dict = {1: [Mock(spec=ConversationHandler)]}
-        state_entry_handlers: dict = {1: [Mock(spec=ConversationHandler)]}
-        pre_fallbacks: list = [Mock(spec=ConversationHandler)]
-        fallbacks: list = [Mock(spec=ConversationHandler)]
+        entry_points: list = [self.get_conversation_handler()]
+        states: dict = {1: [self.get_conversation_handler()]}
+        state_entry_handlers: dict = {1: [self.get_conversation_handler()]}
+        pre_fallbacks: list = [self.get_conversation_handler()]
+        fallbacks: list = [self.get_conversation_handler()]
         allow_reentry = True
 
         cs: ConversationStates = ConversationStates(
@@ -121,11 +126,11 @@ class TestConversationStates:
 
     def test_get_child_conversations(self) -> None:
 
-        entry_points: list = [Mock(spec=ConversationHandler)]
-        states: dict = {1: [Mock(spec=ConversationHandler)]}
-        state_entry_handlers: dict = {1: [Mock(spec=ConversationHandler)]}
-        pre_fallbacks: list = [Mock(spec=ConversationHandler)]
-        fallbacks: list = [Mock(spec=ConversationHandler)]
+        entry_points: list = [self.get_conversation_handler()]
+        states: dict = {1: [self.get_conversation_handler()]}
+        state_entry_handlers: dict = {1: [self.get_conversation_handler()]}
+        pre_fallbacks: list = [self.get_conversation_handler()]
+        fallbacks: list = [self.get_conversation_handler()]
         allow_reentry = True
 
         cs: ConversationStates = ConversationStates(

@@ -19,7 +19,7 @@
 import asyncio
 import logging
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -67,18 +67,19 @@ class TestConversationHandler:
 
         old_state = 1
         task = asyncio.create_task(callback(1, 1))
-        conv_handler_mock: Mock = Mock()
         conversation_data: ConversationData = ConversationData(key=(1, 1), state=None)
         handler: BaseHandler = MessageHandler(None, callback=callback)
         update = Update(1)
         context = CallbackContext(app)
         application = app
         block = False
+        conv_handler: Mock = Mock(ConversationHandler)
+        conv_handler.me = 1
         async with app:
             ps = PendingState(
                 old_state=old_state,
                 task=task,
-                conv_handler=conv_handler_mock,
+                conv_handler=conv_handler,
                 conversation_data=conversation_data,
                 handler=handler,
                 update=update,
@@ -90,7 +91,7 @@ class TestConversationHandler:
         assert ps.application is app
         assert ps.block == block
         assert ps.context is context
-        assert ps.conv_handler is conv_handler_mock
+        assert ps.conv_handler is conv_handler
         assert ps.conversation_data is conversation_data
         assert ps.handler == handler
         assert ps.old_state == old_state
@@ -100,8 +101,16 @@ class TestConversationHandler:
         # let the PendingState resolve its task
         event.set()
         await asyncio.sleep(0.1)
-
-        assert conv_handler_mock._update_state.called
+        conv_handler._update_state.assert_called_once_with(
+            new_state=1,
+            conversation_data=conversation_data,
+            update=update,
+            context=ANY,
+            block=block,
+            application=app,
+            handler=handler,
+            original_conv_key=conversation_data.key,
+        )
 
     @pytest.mark.parametrize("old_state", [1, None])
     @pytest.mark.parametrize("new_state", [1, None, RuntimeError])
@@ -117,7 +126,9 @@ class TestConversationHandler:
             return new_state
 
         task = asyncio.create_task(callback(1, 1))
-        conv_handler_mock: Mock = Mock()
+        conv_handler: ConversationHandler = ConversationHandler(
+            conversation_states=ConversationStates(entry_points=[], states={})
+        )
         conversation_data: ConversationData = ConversationData(key=(1, 1), state=None)
         handler: BaseHandler = MessageHandler(None, callback=callback)
         update = Update(1)
@@ -128,7 +139,7 @@ class TestConversationHandler:
             ps = PendingState(
                 old_state=old_state,
                 task=task,
-                conv_handler=conv_handler_mock,
+                conv_handler=conv_handler,
                 conversation_data=conversation_data,
                 handler=handler,
                 update=update,

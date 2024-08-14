@@ -16,7 +16,6 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-from unittest.mock import MagicMock, Mock
 
 from telegram import Bot, Update
 from telegram.ext import ConversationData
@@ -70,11 +69,9 @@ class TestConversationData:
 
     def test_set_update(self) -> None:
         cd: ConversationData = ConversationData(key=(1, 1), state=2)
-        result = "json form of update"
-        update = Mock(spec=Update)
-        update.to_json = MagicMock(return_value=result)
+        update = Update(1)
         cd.set_update(update=update)
-        assert cd.json_update is result
+        assert cd.json_update == '{"update_id": 1}'
         cd.set_update(update=None)
         assert cd.json_update == ""
 

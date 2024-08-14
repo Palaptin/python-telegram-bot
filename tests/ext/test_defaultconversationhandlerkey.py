@@ -16,14 +16,14 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-from typing import List
+from typing import Any, List
 from unittest.mock import Mock
 from warnings import filterwarnings
 
 import pytest
 from _pytest.recwarn import WarningsRecorder
 
-from telegram import Update
+from telegram import CallbackQuery, Chat, Message, Update, User
 from telegram.ext import (
     CallbackQueryHandler,
     ChosenInlineResultHandler,
@@ -39,6 +39,11 @@ from tests.auxil.slots import mro_slots
 
 
 class TestDefaultConversationHandlerKey:
+
+    async def callback(self, _: Any, __: Any) -> None:
+        # dummy implementation
+        pass
+
     def test_slot_behaviour(self) -> None:
         default_key = DefaultConversationHandlerKey()
         for attr in default_key.__slots__:
@@ -91,28 +96,28 @@ class TestDefaultConversationHandlerKey:
 
         # these handlers should all raise a warning when per_chat is True
         dk = DefaultConversationHandlerKey(per_chat=True)
-        dk.warn_if_handler_is_invalid(Mock(spec=ShippingQueryHandler))
+        dk.warn_if_handler_is_invalid(ShippingQueryHandler(callback=self.callback))
         assert str(recwarn[0].message) == (
             "Updates handled by ShippingQueryHandler only have information about the user,"
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
         )
-        dk.warn_if_handler_is_invalid(Mock(spec=InlineQueryHandler))
+        dk.warn_if_handler_is_invalid(InlineQueryHandler(callback=self.callback))
         assert str(recwarn[1].message) == (
             "Updates handled by InlineQueryHandler only have information about the user,"
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
         )
-        dk.warn_if_handler_is_invalid(Mock(spec=PreCheckoutQueryHandler))
+        dk.warn_if_handler_is_invalid(PreCheckoutQueryHandler(callback=self.callback))
         assert str(recwarn[2].message) == (
             "Updates handled by PreCheckoutQueryHandler only have information about the user,"
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
         )
 
-        dk.warn_if_handler_is_invalid(Mock(spec=PollAnswerHandler))
+        dk.warn_if_handler_is_invalid(PollAnswerHandler(callback=self.callback))
         assert str(recwarn[3].message) == (
             "Updates handled by PollAnswerHandler only have information about the user,"
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
         )
-        dk.warn_if_handler_is_invalid(Mock(spec=ChosenInlineResultHandler))
+        dk.warn_if_handler_is_invalid(ChosenInlineResultHandler(callback=self.callback))
         assert str(recwarn[4].message) == (
             "Updates handled by ChosenInlineResultHandler only have information about the user,"
             " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
@@ -121,11 +126,11 @@ class TestDefaultConversationHandlerKey:
         # the CallbackQueryHandler should *not* raise when per_message is True,
         # but any other one should
         dk = DefaultConversationHandlerKey(per_message=True)
-        dk.warn_if_handler_is_invalid(Mock(spec=CallbackQueryHandler))
+        dk.warn_if_handler_is_invalid(CallbackQueryHandler(callback=self.callback))
         with pytest.raises(IndexError, match="list index out of range"):
             # there should be no error
             _ = recwarn[5]
-        dk.warn_if_handler_is_invalid(Mock(spec=CommandHandler))
+        dk.warn_if_handler_is_invalid(CommandHandler(command="t", callback=self.callback))
         assert str(recwarn[5].message) == (
             "If 'per_message=True', all entry points, pre_fallbacks, state handlers and fallbacks"
             " must be 'CallbackQueryHandler', since no other handlers have a message context."
@@ -134,11 +139,11 @@ class TestDefaultConversationHandlerKey:
 
         # the CallbackQueryHandler should raise when per_message is False, but any other should not
         dk = DefaultConversationHandlerKey(per_message=False)
-        dk.warn_if_handler_is_invalid(Mock(spec=CommandHandler))
+        dk.warn_if_handler_is_invalid(CommandHandler(command="t", callback=self.callback))
         with pytest.raises(IndexError, match="list index out of range"):
             # there should be no error
             _ = recwarn[6]
-        dk.warn_if_handler_is_invalid(Mock(spec=CallbackQueryHandler))
+        dk.warn_if_handler_is_invalid(CallbackQueryHandler(callback=self.callback))
         assert str(recwarn[6].message) == (
             "If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message."
             + per_faq_link
@@ -196,7 +201,7 @@ class TestDefaultConversationHandlerKey:
 
         # Test per_chat
         update = Mock(spec=Update)
-        update.effective_chat = Mock()
+        update.effective_chat = Mock(spec=Chat)
         update.effective_chat.id = 1
         update.effective_user = False
         update.callback_query = False
@@ -205,7 +210,7 @@ class TestDefaultConversationHandlerKey:
         # Test per_user
         update = Mock(spec=Update)
         update.effective_chat = False
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
         update.callback_query = False
         assert dk.from_update(update) == evaluation_helper(user=True)
@@ -214,7 +219,7 @@ class TestDefaultConversationHandlerKey:
         update = Mock(spec=Update)
         update.effective_chat = False
         update.effective_user = False
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = 3
         assert dk.from_update(update) == evaluation_helper(message=True)
 
@@ -222,9 +227,9 @@ class TestDefaultConversationHandlerKey:
         update = Mock(spec=Update)
         update.effective_chat = False
         update.effective_user = False
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = False
-        update.callback_query.message = Mock()
+        update.callback_query.message = Mock(spec=Message)
         update.callback_query.message.message_id = 3
         assert dk.from_update(update) == evaluation_helper(message=True)
 
@@ -232,67 +237,67 @@ class TestDefaultConversationHandlerKey:
         update = Mock(spec=Update)
         update.effective_chat = False
         update.effective_user = False
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = False
         update.callback_query.message = False
         assert dk.from_update(update) == NotImplemented
 
         # Test per_chat + per_user
         update = Mock(spec=Update)
-        update.effective_chat = Mock()
+        update.effective_chat = Mock(speck=Chat)
         update.effective_chat.id = 1
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
         update.callback_query = False
         assert dk.from_update(update) == evaluation_helper(chat=True, user=True)
 
         # Test per_chat + per_message
         update = Mock(spec=Update)
-        update.effective_chat = Mock()
+        update.effective_chat = Mock(spec=Chat)
         update.effective_chat.id = 1
         update.effective_user = False
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = 3
         assert dk.from_update(update) == evaluation_helper(chat=True, message=True)
 
         # Test per_user + per_message(inline)
         update = Mock(spec=Update)
         update.effective_chat = False
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = 3
         assert dk.from_update(update) == evaluation_helper(user=True, message=True)
 
         # Test per_user + per_message(message)
         update = Mock(spec=Update)
         update.effective_chat = False
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = False
-        update.callback_query.message = Mock()
+        update.callback_query.message = Mock(spec=Message)
         update.callback_query.message.message_id = 3
         assert dk.from_update(update) == evaluation_helper(user=True, message=True)
 
         # Test per_chat + per_user + per_message(inline)
         update = Mock(spec=Update)
-        update.effective_chat = Mock()
+        update.effective_chat = Mock(spec=Chat)
         update.effective_chat.id = 1
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = 3
         assert dk.from_update(update) == evaluation_helper(chat=True, user=True, message=True)
 
         # Test per_chat + per_user + per_message(message)
         update = Mock(spec=Update)
-        update.effective_chat = Mock()
+        update.effective_chat = Mock(spec=Chat)
         update.effective_chat.id = 1
-        update.effective_user = Mock()
+        update.effective_user = Mock(spec=User)
         update.effective_user.id = 2
-        update.callback_query = Mock()
+        update.callback_query = Mock(spec=CallbackQuery)
         update.callback_query.inline_message_id = False
-        update.callback_query.message = Mock()
+        update.callback_query.message = Mock(spec=Message)
         update.callback_query.message.message_id = 3
         assert dk.from_update(update) == evaluation_helper(chat=True, user=True, message=True)
