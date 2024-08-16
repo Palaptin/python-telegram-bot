@@ -18,14 +18,21 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """Persistence of conversations is tested in test_basepersistence.py"""
 import asyncio
+import datetime
 import functools
 import logging
+from copy import copy
 from pathlib import Path
+from typing import Any, Callable
 from warnings import filterwarnings
 
 import pytest
+from _pytest.logging import LogCaptureFixture
+from _pytest.monkeypatch import MonkeyPatch
+from _pytest.recwarn import WarningsRecorder
 
 from telegram import (
+    Bot,
     CallbackQuery,
     Chat,
     ChosenInlineResult,
@@ -33,28 +40,24 @@ from telegram import (
     Message,
     MessageEntity,
     PreCheckoutQuery,
+    ShippingAddress,
     ShippingQuery,
     Update,
     User,
 )
+from telegram._utils.defaultvalue import DEFAULT_TRUE
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     ApplicationHandlerStop,
     CallbackContext,
     CallbackQueryHandler,
-    ChosenInlineResultHandler,
     CommandHandler,
+    ContextTypes,
     ConversationHandler,
     Defaults,
-    InlineQueryHandler,
     JobQueue,
     MessageHandler,
-    PollAnswerHandler,
-    PollHandler,
-    PreCheckoutQueryHandler,
-    ShippingQueryHandler,
-    StringCommandHandler,
-    StringRegexHandler,
     TypeHandler,
     filters,
 )
@@ -70,18 +73,18 @@ from tests.auxil.slots import mro_slots
 
 
 @pytest.fixture(scope="class")
-def user1():
+def user1() -> User:
     return User(first_name="Misses Test", id=123, is_bot=False)
 
 
 @pytest.fixture(scope="class")
-def user2():
+def user2() -> User:
     return User(first_name="Mister Test", id=124, is_bot=False)
 
 
-def raise_ahs(func):
+def raise_ahs(func: Callable) -> Callable:
     @functools.wraps(func)  # for checking __repr__
-    async def decorator(self, *args, **kwargs):
+    async def decorator(self: Any, *args: Any, **kwargs: Any) -> Any:
         result = await func(self, *args, **kwargs)
         if self.raise_app_handler_stop:
             raise ApplicationHandlerStop(result)
@@ -102,16 +105,20 @@ class TestConversationHandler:
     # At first we're holding the cup.  Then we sip coffee, and last we swallow it
     HOLDING, SIPPING, SWALLOWING, REPLENISHING, STOPPING = map(chr, range(ord("a"), ord("f")))
 
-    current_state, entry_points, states, pre_fallbacks, fallbacks = None, None, None, None, None
+    current_state: dict = {}
+    entry_points: list = []
+    states: dict = {}
+    pre_fallbacks: list = []
+    fallbacks: list = []
     group = Chat(0, Chat.GROUP)
     second_group = Chat(1, Chat.GROUP)
 
     raise_app_handler_stop = False
-    test_flag = False
+    test_flag: Any = False
 
     # Test related
     @pytest.fixture(autouse=True)
-    def _reset(self):
+    def _reset(self) -> None:
         self.raise_app_handler_stop = False
         self.test_flag = False
         self.current_state = {}
@@ -130,18 +137,18 @@ class TestConversationHandler:
                 CommandHandler("drinkMore", self.drink),
             ],
         }
-        self.state_entry_handlers = {
+        self.state_entry_handlers: dict = {
             self.END: [CommandHandler("end", self.try_to_prevent_end)],
             self.DRINKING: [CommandHandler("pourCoffee", self.drink_is_hot)],
             self.CODING: [CommandHandler("startCoding", self.getting_thirsty)],
         }
-        self.pre_fallbacks = [CommandHandler("fix_prod", self.fix_prod)]
+        self.pre_fallbacks: list = [CommandHandler("fix_prod", self.fix_prod)]
         self.fallbacks = [CommandHandler("eat", self.start)]
         self.is_timeout = False
         self.state_entry_entered = False
 
         # for nesting tests
-        self.nested_states = {
+        self.nested_states: dict = {
             self.THIRSTY: [CommandHandler("brew", self.brew), CommandHandler("wait", self.start)],
             self.BREWING: [CommandHandler("pourCoffee", self.drink)],
             self.CODING: [
@@ -150,13 +157,13 @@ class TestConversationHandler:
                 CommandHandler("drinkMore", self.drink),
             ],
         }
-        self.drinking_entry_points = [CommandHandler("hold", self.hold)]
-        self.drinking_states = {
+        self.drinking_entry_points: list = [CommandHandler("hold", self.hold)]
+        self.drinking_states: dict = {
             self.HOLDING: [CommandHandler("sip", self.sip)],
             self.SIPPING: [CommandHandler("swallow", self.swallow)],
             self.SWALLOWING: [CommandHandler("hold", self.hold)],
         }
-        self.drinking_fallbacks = [
+        self.drinking_fallbacks: list = [
             CommandHandler("replenish", self.replenish),
             CommandHandler("stop", self.stop),
             CommandHandler("end", self.end),
@@ -166,7 +173,7 @@ class TestConversationHandler:
         self.drinking_entry_points.extend(self.drinking_fallbacks)
 
         # Map nested states to parent states:
-        self.drinking_map_to_parent = {
+        self.drinking_map_to_parent: dict = {
             # Option 1 - Map a fictional internal state to an external parent state
             self.REPLENISHING: self.BREWING,
             # Option 2 - Map a fictional internal state to the END state on the parent
@@ -180,288 +187,174 @@ class TestConversationHandler:
         }
 
     # State handlers
-    def _set_state(self, update, state):
-        self.current_state[update.message.from_user.id] = state
+    def _set_state(self, update: Update, state: object) -> object:
+        self.current_state[update.message.from_user.id] = state  # type: ignore
         return state
 
     # Actions
     @raise_ahs
-    async def start(self, update, context):
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> object:
         if isinstance(update, Update):
             return self._set_state(update, self.THIRSTY)
         return self._set_state(context.bot, self.THIRSTY)
 
     @raise_ahs
-    async def end(self, update, context):
+    async def end(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.END)
 
     @raise_ahs
-    async def start_end(self, update, context):
+    async def start_end(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.END)
 
     @raise_ahs
-    async def start_none(self, update, context):
+    async def start_none(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, None)
 
     @raise_ahs
-    async def brew(self, update, context):
+    async def brew(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> object:
         if isinstance(update, Update):
             return self._set_state(update, self.BREWING)
         return self._set_state(context.bot, self.BREWING)
 
     @raise_ahs
-    async def drink_is_hot(self, update, context):
+    async def drink_is_hot(self, _: Update, __: ContextTypes.DEFAULT_TYPE) -> None:
         self.state_entry_entered = True
 
     @raise_ahs
-    async def getting_thirsty(self, update, context):
-        self.state_entry_entered = True
-        return self._set_state(update, self.THIRSTY)
-
-    @raise_ahs
-    async def try_to_prevent_end(self, update, context):
+    async def getting_thirsty(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         self.state_entry_entered = True
         return self._set_state(update, self.THIRSTY)
 
     @raise_ahs
-    async def drink(self, update, context):
+    async def try_to_prevent_end(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
+        self.state_entry_entered = True
+        return self._set_state(update, self.THIRSTY)
+
+    @raise_ahs
+    async def drink(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.DRINKING)
 
     @raise_ahs
-    async def code(self, update, context):
+    async def code(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.CODING)
 
     @raise_ahs
-    async def fix_prod(self, update, context):
+    async def fix_prod(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.FIX_PROD)
 
     @raise_ahs
-    async def passout(self, update, context):
-        assert update.message.text == "/brew"
+    async def passout(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        assert update.message.text == "/brew"  # type: ignore
         assert isinstance(update, Update)
         self.is_timeout = True
 
     @raise_ahs
-    async def passout2(self, update, context):
+    async def passout2(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         assert isinstance(update, Update)
         self.is_timeout = True
 
     @raise_ahs
-    async def passout_context(self, update, context):
-        assert update.message.text == "/brew"
+    async def passout_context(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        assert update.message.text == "/brew"  # type: ignore
         assert isinstance(context, CallbackContext)
         self.is_timeout = True
 
     @raise_ahs
-    async def passout2_context(self, update, context):
+    async def passout2_context(self, _: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         assert isinstance(context, CallbackContext)
         self.is_timeout = True
 
     # Drinking actions (nested)
 
     @raise_ahs
-    async def hold(self, update, context):
+    async def hold(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.HOLDING)
 
     @raise_ahs
-    async def sip(self, update, context):
+    async def sip(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.SIPPING)
 
     @raise_ahs
-    async def swallow(self, update, context):
+    async def swallow(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.SWALLOWING)
 
     @raise_ahs
-    async def replenish(self, update, context):
+    async def replenish(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.REPLENISHING)
 
     @raise_ahs
-    async def stop(self, update, context):
+    async def stop(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         return self._set_state(update, self.STOPPING)
 
-    def test_slot_behaviour(self):
-        handler = ConversationHandler(
+    def test_slot_behaviour(self) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(entry_points=[], states={})
         )
         for attr in handler.__slots__:
             assert getattr(handler, attr, "err") != "err", f"got extra slot '{attr}'"
         assert len(mro_slots(handler)) == len(set(mro_slots(handler))), "duplicate slot"
 
-    def test_init(self):
-        entry_points = []
-        state_entry_handlers = {}
-        states = {}
-        pre_fallbacks = []
-        fallbacks = []
-        map_to_parent = {}
-        ch = ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=entry_points,
-                states=states,
-                state_entry_handlers=state_entry_handlers,
-                pre_fallbacks=pre_fallbacks,
-                fallbacks=fallbacks,
-                map_to_parent=map_to_parent,
-                allow_reentry="allow_reentry",
-            ),
-            key_builder=DefaultConversationHandlerKey(
-                per_chat="per_chat", per_user="per_user", per_message="per_message"
-            ),
-            persistent="persistent",
-            name="name",
-            conversation_timeout=42,
+    def test_init(self) -> None:
+        conversation_states: ConversationStates = ConversationStates(
+            entry_points=self.entry_points, states=self.states
         )
-        assert ch.available_states.entry_points is entry_points
-        assert ch.available_states.states is states
-        assert ch.available_states.state_entry_handlers is state_entry_handlers
-        assert ch.available_states.pre_fallbacks is pre_fallbacks
-        assert ch.available_states.fallbacks is fallbacks
-        assert ch.available_states.map_to_parent is map_to_parent
-        assert ch.available_states.allow_reentry == "allow_reentry"
-        assert ch.key_builder.per_chat == "per_chat"
-        assert ch.key_builder.per_user == "per_user"
-        assert ch.key_builder.per_message == "per_message"
-        assert ch.persistent == "persistent"
+        key_builder = DefaultConversationHandlerKey()
+        conversation_data_context_type = object()
+        ch = ConversationHandler(
+            conversation_states=conversation_states,
+            key_builder=key_builder,
+            conversation_timeout=42,
+            name="name",
+            persistent="persistent",  # type: ignore
+            block="block",  # type: ignore
+            conversation_context_data_type=conversation_data_context_type,
+        )
+        assert ch.available_states is conversation_states
+        assert ch.key_builder is key_builder
+        assert ch._conversation_timeout == 42
         assert ch.name == "name"
+        assert ch.persistent == "persistent"
+        assert ch.block is True  # always True, since blocking is handled internally
+        assert ch._block == "block"
+        assert ch.conversation_context_data_type is conversation_data_context_type
 
-    def test_init_persistent_no_name(self):
+    def test_init_default_values(self) -> None:
+        conversation_states: ConversationStates = ConversationStates(
+            entry_points=self.entry_points, states=self.states
+        )
+        key_builder = DefaultConversationHandlerKey()
+
+        ch: ConversationHandler = ConversationHandler(
+            conversation_states=conversation_states, key_builder=key_builder
+        )
+
+        assert ch.available_states is conversation_states
+        assert ch.key_builder is key_builder
+        assert ch._conversation_timeout is None
+        assert ch.name is None
+        assert ch.persistent is False
+        assert ch.block is True
+        assert ch._block == DEFAULT_TRUE
+        assert ch.conversation_context_data_type is None
+
+    def test_init_persistent_no_name(self) -> None:
         with pytest.raises(ValueError, match="can't be persistent when handler is unnamed"):
             ConversationHandler(
                 conversation_states=ConversationStates(self.entry_points, states=self.states),
                 persistent=True,
             )
 
-    def test_repr_no_truncation(self):
-        # ConversationHandler's __repr__ is not inherited from BaseHandler.
-        ch = ConversationHandler(
-            name="test_handler",
-            conversation_states=ConversationStates(
-                entry_points=[],
-                states=self.drinking_states,
-            ),
-        )
-        assert repr(ch) == (
-            "ConversationHandler[name=test_handler, "
-            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
-            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
-            "'c': [CommandHandler[callback=TestConversationHandler.hold]]}]"
-        )
-
-    def test_repr_with_truncation(self):
-        from copy import copy
-
-        states = copy(self.drinking_states)
-        # there are exactly 3 drinking states. adding one more to make sure it's truncated
-        states["extra_to_be_truncated"] = [CommandHandler("foo", self.start)]
-
-        ch = ConversationHandler(
-            name="test_handler",
-            conversation_states=ConversationStates(
-                entry_points=[],
-                states=states,
-            ),
-        )
-        assert repr(ch) == (
-            "ConversationHandler[name=test_handler, "
-            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
-            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
-            "'c': [CommandHandler[callback=TestConversationHandler.hold]], ...}]"
-        )
-
-    async def test_check_update_returns_non(self, app, user1):
-        """checks some cases where updates should not be handled"""
-        conv_handler = ConversationHandler(
-            conversation_states=ConversationStates(entry_points=[], states={}, fallbacks=[]),
-            key_builder=DefaultConversationHandlerKey(
-                per_message=True,
-                per_chat=True,
-            ),
-        )
-        assert not conv_handler.check_update("not an Update")
-        assert not conv_handler.check_update(Update(0))
-        assert not conv_handler.check_update(
-            Update(0, callback_query=CallbackQuery("1", from_user=user1, chat_instance="1"))
-        )
-
-    async def test_handlers_generate_warning(self, recwarn):
+    async def test_handlers_generate_warning(self, recwarn: WarningsRecorder) -> None:
         """this function tests all handler + per_* setting combinations."""
 
         # the warning message action needs to be set to always,
         # otherwise only the first occurrence will be issued
         filterwarnings(action="always", category=PTBUserWarning)
 
-        # this class doesn't do anything, its just not the Update class
-        class NotUpdate:
-            pass
-
         recwarn.clear()
 
-        # this conversation handler has the string, string_regex, Pollhandler and TypeHandler
-        # which should all generate a warning no matter the per_* setting. TypeHandler should
-        # not when the class is Update
-        ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=[StringCommandHandler("code", self.code)],
-                states={
-                    self.BREWING: [
-                        StringRegexHandler("code", self.code),
-                        PollHandler(self.code),
-                        TypeHandler(NotUpdate, self.code),
-                    ],
-                },
-                fallbacks=[TypeHandler(Update, self.code)],
-            )
-        )
-
-        # these handlers should all raise a warning when per_chat is True
-        ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=[ShippingQueryHandler(self.code)],
-                states={
-                    self.BREWING: [
-                        InlineQueryHandler(self.code),
-                        PreCheckoutQueryHandler(self.code),
-                        PollAnswerHandler(self.code),
-                    ],
-                },
-                fallbacks=[ChosenInlineResultHandler(self.code)],
-            ),
-            key_builder=DefaultConversationHandlerKey(
-                per_chat=True,
-            ),
-        )
-
-        # the CallbackQueryHandler should *not* raise when per_message is True,
-        # but any other one should
-        ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=[CallbackQueryHandler(self.code)],
-                states={
-                    self.BREWING: [CommandHandler("code", self.code)],
-                },
-                fallbacks=[CallbackQueryHandler(self.code)],
-            ),
-            key_builder=DefaultConversationHandlerKey(
-                per_message=True,
-            ),
-        )
-
-        # the CallbackQueryHandler should raise when per_message is False
-        ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=[CommandHandler("code", self.code)],
-                states={
-                    self.BREWING: [CommandHandler("code", self.code)],
-                },
-                fallbacks=[CallbackQueryHandler(self.code)],
-            ),
-            key_builder=DefaultConversationHandlerKey(
-                per_message=False,
-            ),
-        )
-
         # adding a nested conv to a conversation with timeout should warn
-        child = ConversationHandler(
+        child: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("code", self.code)],
                 states={
@@ -482,21 +375,6 @@ class TestConversationHandler:
             conversation_timeout=42,
         )
 
-        # If per_message is True, per_chat should also be True, since msg ids are not unique
-        ConversationHandler(
-            conversation_states=ConversationStates(
-                entry_points=[CallbackQueryHandler(self.code, "code")],
-                states={
-                    self.BREWING: [CallbackQueryHandler(self.code, "code")],
-                },
-                fallbacks=[CallbackQueryHandler(self.code, "code")],
-            ),
-            key_builder=DefaultConversationHandlerKey(
-                per_message=True,
-                per_chat=False,
-            ),
-        )
-
         # If state is END (-1) we also issue a warning
         ConversationHandler(
             conversation_states=ConversationStates(
@@ -513,81 +391,19 @@ class TestConversationHandler:
         )
 
         # the overall number of handlers throwing a warning is 13
-        assert len(recwarn) == 14
+        assert len(recwarn) == 2
         # now we test the messages, they are raised in the order they are inserted
         # into the conversation handler
+
         assert (
             str(recwarn[0].message)
-            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
-            "StringCommandHandler handles updates of type `str`."
-        )
-        assert (
-            str(recwarn[1].message)
-            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
-            "StringRegexHandler handles updates of type `str`."
-        )
-        assert (
-            str(recwarn[2].message)
-            == "PollHandler will never trigger in a conversation since it has no information "
-            "about the chat or the user who voted in it. Do you mean the "
-            "`PollAnswerHandler`?"
-        )
-        assert (
-            str(recwarn[3].message)
-            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
-            "The TypeHandler is set to handle NotUpdate."
-        )
-
-        per_faq_link = (
-            " Read this FAQ entry to learn more about the per_* settings: "
-            "https://github.com/python-telegram-bot/python-telegram-bot/wiki"
-            "/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do."
-        )
-
-        assert str(recwarn[4].message) == (
-            "Updates handled by ShippingQueryHandler only have information about the user,"
-            " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
-        )
-        assert str(recwarn[5].message) == (
-            "Updates handled by ChosenInlineResultHandler only have information about the user,"
-            " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
-        )
-        assert str(recwarn[6].message) == (
-            "Updates handled by InlineQueryHandler only have information about the user,"
-            " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
-        )
-        assert str(recwarn[7].message) == (
-            "Updates handled by PreCheckoutQueryHandler only have information about the user,"
-            " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
-        )
-        assert str(recwarn[8].message) == (
-            "Updates handled by PollAnswerHandler only have information about the user,"
-            " so this handler won't ever be triggered if `per_chat=True`." + per_faq_link
-        )
-        assert str(recwarn[9].message) == (
-            "If 'per_message=True', all entry points, pre_fallbacks, state handlers and fallbacks"
-            " must be 'CallbackQueryHandler', since no other handlers have a message context."
-            + per_faq_link
-        )
-        assert str(recwarn[10].message) == (
-            "If 'per_message=False', 'CallbackQueryHandler' will not be tracked for every message."
-            + per_faq_link
-        )
-        assert (
-            str(recwarn[11].message)
             == "Using `conversation_timeout` with nested conversations is currently not "
             "supported. You can still try to use it, but it will likely behave differently"
             " from what you expect."
         )
 
         assert (
-            str(recwarn[12].message)
-            == "If 'per_message=True' is used, 'per_chat=True' should also be used, "
-            "since message IDs are not globally unique."
-        )
-
-        assert (
-            str(recwarn[13].message)
+            str(recwarn[1].message)
             == "The END state (-1) is reserved and shouldn't be used as a state name in the "
             "`ConversationHandler`."
         )
@@ -597,36 +413,75 @@ class TestConversationHandler:
             assert warning.category is PTBUserWarning
             assert warning.filename == __file__, "incorrect stacklevel!"
 
+    def test_repr_no_truncation(self) -> None:
+        # ConversationHandler's __repr__ is not inherited from BaseHandler.
+        ch: ConversationHandler = ConversationHandler(
+            name="test_handler",
+            conversation_states=ConversationStates(
+                entry_points=[],
+                states=self.drinking_states,
+            ),
+        )
+        assert repr(ch) == (
+            "ConversationHandler[name=test_handler, "
+            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
+            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
+            "'c': [CommandHandler[callback=TestConversationHandler.hold]]}]"
+        )
+
+    def test_repr_with_truncation(self) -> None:
+
+        states = copy(self.drinking_states)
+        # there are exactly 3 drinking states. adding one more to make sure it's truncated
+        states["extra_to_be_truncated"] = [CommandHandler("foo", self.start)]
+
+        ch: ConversationHandler = ConversationHandler(
+            name="test_handler",
+            conversation_states=ConversationStates(
+                entry_points=[],
+                states=states,
+            ),
+        )
+        assert repr(ch) == (
+            "ConversationHandler[name=test_handler, "
+            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
+            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
+            "'c': [CommandHandler[callback=TestConversationHandler.hold]], ...}]"
+        )
+
+    async def test_check_update_returns_non(self, app: Application, user1: User) -> None:
+        """checks some cases where updates should not be handled"""
+        conv_handler: ConversationHandler = ConversationHandler(
+            conversation_states=ConversationStates(entry_points=[], states={}, fallbacks=[]),
+            key_builder=DefaultConversationHandlerKey(
+                per_message=True,
+                per_chat=True,
+            ),
+        )
+        assert not conv_handler.check_update("not an Update")
+        assert not conv_handler.check_update(Update(0))
+        assert not conv_handler.check_update(
+            Update(0, callback_query=CallbackQuery("1", from_user=user1, chat_instance="1"))
+        )
+
     @pytest.mark.parametrize(
         "attr",
         ["name", "persistent", "conversation_timeout"],
         indirect=False,
     )
-    def test_immutable(self, attr):
-        ch = ConversationHandler(
+    def test_immutable(self, attr: str) -> None:
+        ch: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(entry_points=[], states={})
         )
         print(attr)
         with pytest.raises(AttributeError, match=f"You can not assign a new value to {attr}"):
             setattr(ch, attr, True)
 
-    def test_per_all_false(self):
-        with pytest.raises(ValueError, match="can't all be 'False'"):
-            ConversationHandler(
-                conversation_states=ConversationStates(
-                    entry_points=[],
-                    states={},
-                ),
-                key_builder=DefaultConversationHandlerKey(
-                    per_chat=False,
-                    per_user=False,
-                    per_message=False,
-                ),
-            )
-
     @pytest.mark.parametrize("raise_ahs", [True, False])
-    async def test_basic_and_app_handler_stop(self, app, bot, user1, user2, raise_ahs):
-        handler = ConversationHandler(
+    async def test_basic_and_app_handler_stop(
+        self, app: Application, bot: Bot, user1: User, user2: User, raise_ahs: bool
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -636,7 +491,7 @@ class TestConversationHandler:
         )
         app.add_handler(handler)
 
-        async def callback(_, __):
+        async def callback(_: Any, __: Any) -> None:
             self.test_flag = True
 
         app.add_handler(TypeHandler(object, callback), group=100)
@@ -645,7 +500,7 @@ class TestConversationHandler:
         # User one, starts the state machine.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -688,10 +543,12 @@ class TestConversationHandler:
             message.from_user = user2
             await app.process_update(Update(update_id=0, message=message))
             with pytest.raises(KeyError):
-                self.current_state[user2.id]
+                _ = self.current_state[user2.id]
 
-    async def test_conversation_handler_end(self, caplog, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_conversation_handler_end(
+        self, caplog: LogCaptureFixture, app: Application, bot: Bot, user1: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -703,7 +560,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -737,14 +594,16 @@ class TestConversationHandler:
             message.entities[0].length = len("/start")
             assert handler.check_update(Update(update_id=0, message=message))
 
-    async def test_conversation_handler_state_entry_handler(self, app, bot, user1, user2, recwarn):
+    async def test_conversation_handler_state_entry_handler(
+        self, app: Application, bot: Bot, user1: User, user2: User, recwarn: WarningsRecorder
+    ) -> None:
         # test if the state_entry_handler is being called.
 
         # append an end state for this test.
         states = self.states
         states[self.THIRSTY].append(CommandHandler("end", self.end))
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=states,
@@ -758,7 +617,7 @@ class TestConversationHandler:
         # first check if state_entry_handlers will not trigger when not started
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/brew",
@@ -773,7 +632,7 @@ class TestConversationHandler:
         async with app:
             await app.process_update(Update(update_id=0, message=message))
             with pytest.raises(KeyError):
-                self.current_state[user1.id]
+                _ = self.current_state[user1.id]
 
             # User starts the state machine.
             message.text = "/start"
@@ -828,11 +687,12 @@ class TestConversationHandler:
                 == "State END (-1) can not be changed by state_entry_handlers."
             )
             # check the conversation is really ended.
-            with pytest.raises(KeyError):
-                handler._conversations[user1.id]
+            assert len(handler._conversations) == 0
 
-    async def test_conversation_handler_fallback(self, app, bot, user1, user2):
-        handler = ConversationHandler(
+    async def test_conversation_handler_fallback(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -845,7 +705,7 @@ class TestConversationHandler:
         # first check if fallback will not trigger start when not started
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/eat",
@@ -858,7 +718,7 @@ class TestConversationHandler:
         async with app:
             await app.process_update(Update(update_id=0, message=message))
             with pytest.raises(KeyError):
-                self.current_state[user1.id]
+                _ = self.current_state[user1.id]
 
             # User starts the state machine.
             message.text = "/start"
@@ -878,12 +738,14 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.THIRSTY
 
-    async def test_conversation_handler_pre_fallback(self, app, bot, user1, user2):
+    async def test_conversation_handler_pre_fallback(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
         # extend the states with the pre_fallback command
         states = self.states
         states[self.BREWING].append(CommandHandler("fix_prod", self.start))
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=states,
@@ -896,7 +758,7 @@ class TestConversationHandler:
         # first check if pre_fallback will not trigger when not started
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/fix_prod",
@@ -911,7 +773,7 @@ class TestConversationHandler:
         async with app:
             await app.process_update(Update(update_id=0, message=message))
             with pytest.raises(KeyError):
-                self.current_state[user1.id]
+                _ = self.current_state[user1.id]
 
             # User starts the state machine.
             message.text = "/start"
@@ -931,14 +793,16 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.FIX_PROD
 
-    async def test_unknown_state_warning(self, app, bot, user1, recwarn):
-        def build_callback(state):
-            async def callback(_, __):
+    async def test_unknown_state_warning(
+        self, app: Application, bot: Bot, user1: User, recwarn: WarningsRecorder
+    ) -> None:
+        def build_callback(state: object) -> Callable:
+            async def callback(_: Any, __: Any) -> object:
                 return state
 
             return callback
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", build_callback(1))],
                 states={
@@ -953,7 +817,7 @@ class TestConversationHandler:
         app.add_handler(handler)
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -987,8 +851,10 @@ class TestConversationHandler:
                 == "'callback' returned state 69 which is unknown to the ConversationHandler xyz."
             )
 
-    async def test_conversation_handler_per_chat(self, app, bot, user1, user2):
-        handler = ConversationHandler(
+    async def test_conversation_handler_per_chat(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1004,7 +870,7 @@ class TestConversationHandler:
         # User one, starts the state machine.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1040,8 +906,10 @@ class TestConversationHandler:
             message.from_user = user2
             assert handler.check_update(Update(update_id=0, message=message))
 
-    async def test_conversation_handler_per_user(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_conversation_handler_per_user(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1057,7 +925,7 @@ class TestConversationHandler:
         # User one, starts the state machine.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1100,17 +968,19 @@ class TestConversationHandler:
 
     @pytest.mark.parametrize("inline", [True, False])
     @pytest.mark.filterwarnings("ignore: If 'per_message=True' is used, 'per_chat=True'")
-    async def test_conversation_handler_per_message(self, app, bot, user1, user2, inline):
-        async def entry(update, context):
+    async def test_conversation_handler_per_message(
+        self, app: Application, bot: Bot, user1: User, user2: User, inline: bool
+    ) -> None:
+        async def entry(_: Any, __: Any) -> int:
             return 1
 
-        async def one(update, context):
+        async def one(_: Any, __: Any) -> int:
             return 2
 
-        async def two(update, context):
+        async def two(_: Any, __: Any) -> int:
             return ConversationHandler.END
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CallbackQueryHandler(entry)],
                 states={
@@ -1127,7 +997,13 @@ class TestConversationHandler:
 
         # User one, starts the state machine.
         message = (
-            Message(0, None, self.group, from_user=user1, text="msg w/ inlinekeyboard")
+            Message(
+                0,
+                datetime.datetime.now(),
+                self.group,
+                from_user=user1,
+                text="msg w/ inlinekeyboard",
+            )
             if not inline
             else None
         )
@@ -1138,18 +1014,18 @@ class TestConversationHandler:
 
         async with app:
             cbq_1 = CallbackQuery(
-                0,
+                "0",
                 user1,
-                None,
+                "",
                 message=message,
                 data="1",
                 inline_message_id=inline_message_id,
             )
             cbq_1.set_bot(bot)
             cbq_2 = CallbackQuery(
-                0,
+                "0",
                 user1,
-                None,
+                "",
                 message=message,
                 data="2",
                 inline_message_id=inline_message_id,
@@ -1177,8 +1053,8 @@ class TestConversationHandler:
             assert not handler.check_update(Update(0, callback_query=cbq_1))
             assert handler.check_update(Update(0, callback_query=cbq_2))
 
-    async def test_end_on_first_message(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_end_on_first_message(self, app: Application, bot: Bot, user1: User) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", self.start_end)], states={}
             )
@@ -1188,7 +1064,7 @@ class TestConversationHandler:
         # User starts the state machine and immediately ends it.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1203,8 +1079,10 @@ class TestConversationHandler:
             await app.process_update(Update(update_id=0, message=message))
             assert handler.check_update(Update(update_id=0, message=message))
 
-    async def test_end_on_first_message_non_blocking_handler(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_end_on_first_message_non_blocking_handler(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", callback=self.start_end, block=False)],
                 states={},
@@ -1217,7 +1095,7 @@ class TestConversationHandler:
         # time.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1238,8 +1116,8 @@ class TestConversationHandler:
             # b) the conversation has ended
             assert handler.check_update(Update(0, message=message))
 
-    async def test_none_on_first_message(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_none_on_first_message(self, app: Application, bot: Bot, user1: User) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[MessageHandler(filters.ALL, self.start_none)], states={}
             )
@@ -1247,7 +1125,7 @@ class TestConversationHandler:
         app.add_handler(handler)
 
         # User starts the state machine and a callback function returns None
-        message = Message(0, None, self.group, from_user=user1, text="/start")
+        message = Message(0, datetime.datetime.now(), self.group, from_user=user1, text="/start")
         message.set_bot(bot)
         message._unfreeze()
         async with app:
@@ -1256,8 +1134,10 @@ class TestConversationHandler:
             # ended
             assert handler.check_update(Update(0, message=message))
 
-    async def test_none_on_first_message_non_blocking_handler(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_none_on_first_message_non_blocking_handler(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", self.start_none, block=False)],
                 states={},
@@ -1269,7 +1149,7 @@ class TestConversationHandler:
         # non-blocking results are resolved when the users state is queried next time.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             text="/start",
             from_user=user1,
@@ -1290,24 +1170,26 @@ class TestConversationHandler:
             # b) the conversation has ended
             assert handler.check_update(Update(0, message=message))
 
-    async def test_per_chat_message_without_chat(self, bot, user1):
-        handler = ConversationHandler(
+    async def test_per_chat_message_without_chat(self, bot: Bot, user1: User) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", self.start_end)], states={}
             )
         )
-        cbq = CallbackQuery(0, user1, None, None)
+        cbq = CallbackQuery("0", user1, "", None)
         cbq.set_bot(bot)
         update = Update(0, callback_query=cbq)
         assert not handler.check_update(update)
 
-    async def test_channel_message_without_chat(self, bot):
-        handler = ConversationHandler(
+    async def test_channel_message_without_chat(self, bot: Bot) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[MessageHandler(filters.ALL, self.start_end)], states={}
             )
         )
-        message = Message(0, date=None, chat=Chat(0, Chat.CHANNEL, "Misses Test"))
+        message = Message(
+            0, date=datetime.datetime.now(), chat=Chat(0, Chat.CHANNEL, "Misses Test")
+        )
         message.set_bot(bot)
         message._unfreeze()
 
@@ -1317,24 +1199,24 @@ class TestConversationHandler:
         update = Update(0, edited_channel_post=message)
         assert not handler.check_update(update)
 
-    async def test_all_update_types(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_all_update_types(self, app: Application, bot: Bot, user1: User) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", self.start_end)], states={}
             )
         )
-        message = Message(0, None, self.group, from_user=user1, text="ignore")
+        message = Message(0, datetime.datetime.now(), self.group, from_user=user1, text="ignore")
         message.set_bot(bot)
         message._unfreeze()
-        callback_query = CallbackQuery(0, user1, None, message=message, data="data")
+        callback_query = CallbackQuery("0", user1, "", message=message, data="data")
         callback_query.set_bot(bot)
-        chosen_inline_result = ChosenInlineResult(0, user1, "query")
+        chosen_inline_result = ChosenInlineResult("0", user1, "query")
         chosen_inline_result.set_bot(bot)
-        inline_query = InlineQuery(0, user1, "query", offset="")
+        inline_query = InlineQuery("0", user1, "query", offset="")
         inline_query.set_bot(bot)
-        pre_checkout_query = PreCheckoutQuery(0, user1, "USD", 100, [])
+        pre_checkout_query = PreCheckoutQuery("0", user1, "USD", 100, "")
         pre_checkout_query.set_bot(bot)
-        shipping_query = ShippingQuery(0, user1, [], None)
+        shipping_query = ShippingQuery("0", user1, "", ShippingAddress("", "", "", "", "", ""))
         shipping_query.set_bot(bot)
         assert not handler.check_update(Update(0, callback_query=callback_query))
         assert not handler.check_update(Update(0, chosen_inline_result=chosen_inline_result))
@@ -1344,8 +1226,10 @@ class TestConversationHandler:
         assert not handler.check_update(Update(0, shipping_query=shipping_query))
 
     @pytest.mark.parametrize("jq", [True, False])
-    async def test_no_running_job_queue_warning(self, app, bot, user1, recwarn, jq):
-        handler = ConversationHandler(
+    async def test_no_running_job_queue_warning(
+        self, app: Application, bot: Bot, user1: User, recwarn: WarningsRecorder, jq: bool
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1360,7 +1244,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1397,8 +1281,14 @@ class TestConversationHandler:
                 ), "wrong stacklevel!"
             # now set app.job_queue back to it's original value
 
-    async def test_schedule_job_exception(self, app, bot, user1, monkeypatch, caplog):
-        def mocked_run_once(*a, **kw):
+    async def test_schedule_job_exception(
+        self,
+        bot: Bot,
+        user1: User,
+        monkeypatch: MonkeyPatch,
+        caplog: LogCaptureFixture,
+    ) -> None:
+        def mocked_run_once(*_: Any, **__: Any) -> None:
             raise Exception("job error")
 
         class DictJB(JobQueue):
@@ -1406,7 +1296,7 @@ class TestConversationHandler:
 
         app = ApplicationBuilder().token(bot.token).job_queue(DictJB()).build()
         monkeypatch.setattr(app.job_queue, "run_once", mocked_run_once)
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1419,7 +1309,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1441,29 +1331,31 @@ class TestConversationHandler:
             assert len(caplog.records) == 1
             assert caplog.records[0].message == "Failed to schedule timeout."
             assert caplog.records[0].name == "telegram.ext.ConversationHandler"
-            assert str(caplog.records[0].exc_info[1]) == "job error"
+            assert str(caplog.records[0].exc_info[1]) == "job error"  # type: ignore
 
             await app.stop()
 
     @pytest.mark.parametrize(argnames="test_type", argvalues=["none", "exception"])
-    async def test_non_blocking_exception_or_none(self, app, bot, user1, caplog, test_type):
+    async def test_non_blocking_exception_or_none(
+        self, app: Application, bot: Bot, user1: User, caplog: LogCaptureFixture, test_type: str
+    ) -> None:
         """Here we make sure that when a non-blocking handler raises an
         exception or returns None, the state isn't changed.
         """
         error = Exception("task exception")
 
-        async def conv_entry(*a, **kw):
+        async def conv_entry(_: Any, __: Any) -> int:
             return 1
 
-        async def raise_error(*a, **kw):
+        async def raise_error(_: Any, __: Any) -> None:
             if test_type == "none":
                 return
             raise error
 
-        async def error_handler(*a, **kw):
+        async def error_handler(_: Any, __: Any) -> None:
             return
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", conv_entry)],
                 states={1: [MessageHandler(filters.Text(["error"]), raise_error)]},
@@ -1477,7 +1369,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1506,23 +1398,25 @@ class TestConversationHandler:
                     caplog.records[0].message
                     == "Task function raised exception. Falling back to old state 1"
                 )
-                assert caplog.records[0].exc_info[1] is None
+                assert caplog.records[0].exc_info[1] is None  # type: ignore
             else:
                 assert len(caplog.records) == 0
 
-    async def test_non_blocking_entry_point_exception(self, app, bot, user1, caplog):
+    async def test_non_blocking_entry_point_exception(
+        self, app: Application, bot: Bot, user1: User, caplog: LogCaptureFixture
+    ) -> None:
         """Here we make sure that when a non-blocking entry point raises an
         exception, the state isn't changed.
         """
         error = Exception("task exception")
 
-        async def raise_error(*a, **kw):
+        async def raise_error(_: Any, __: Any) -> None:
             raise error
 
-        async def error_handler(*a, **kw):
+        async def error_handler(_: Any, __: Any) -> None:
             return
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", raise_error, block=False)],
                 states={},
@@ -1535,7 +1429,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1560,10 +1454,10 @@ class TestConversationHandler:
                 caplog.records[0].message
                 == "An non-blocking entry-point raised an exception. Ending Conversation."
             )
-            assert caplog.records[0].exc_info[1] is None
+            assert caplog.records[0].exc_info[1] is None  # type: ignore
 
-    async def test_conversation_timeout(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_conversation_timeout(self, app: Application, bot: Bot, user1: User) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1577,7 +1471,7 @@ class TestConversationHandler:
         # Start state machine, then reach timeout
         start_message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1588,7 +1482,7 @@ class TestConversationHandler:
         start_message.set_bot(bot)
         brew_message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/brew",
@@ -1599,7 +1493,7 @@ class TestConversationHandler:
         brew_message.set_bot(bot)
         pour_coffee_message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/pourCoffee",
@@ -1619,24 +1513,23 @@ class TestConversationHandler:
             # Start state machine, do something, then reach timeout
             await app.process_update(Update(update_id=1, message=start_message))
             assert handler.check_update(Update(0, message=brew_message))
-            # assert handler.conversations.get((self.group.id, user1.id)) == self.THIRSTY
-            # start_message.text = '/brew'
-            # start_message.entities[0].length = len('/brew')
+
             await app.process_update(Update(update_id=2, message=brew_message))
             assert handler.check_update(Update(0, message=pour_coffee_message))
-            # assert handler.conversations.get((self.group.id, user1.id)) == self.BREWING
+
             await asyncio.sleep(0.75)
             assert handler.check_update(Update(0, message=start_message))
-            # assert handler.conversations.get((self.group.id, user1.id)) is None
 
             await app.stop()
 
-    async def test_timeout_not_triggered_on_conv_end_non_blocking(self, bot, app, user1):
-        def timeout(*a, **kw):
+    async def test_timeout_not_triggered_on_conv_end_non_blocking(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
+        async def timeout(_: Any, __: Any) -> None:
             self.test_flag = True
 
         self.states.update({ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout)]})
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1650,7 +1543,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1680,8 +1573,10 @@ class TestConversationHandler:
             # assert timeout handler didn't get called
             assert self.test_flag is False
 
-    async def test_conversation_timeout_application_handler_stop(self, app, bot, user1, recwarn):
-        handler = ConversationHandler(
+    async def test_conversation_timeout_application_handler_stop(
+        self, app: Application, bot: Bot, user1: User, recwarn: WarningsRecorder
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1691,7 +1586,7 @@ class TestConversationHandler:
             conversation_timeout=0.5,
         )
 
-        def timeout(*args, **kwargs):
+        async def timeout(_: Any, __: Any) -> None:
             raise ApplicationHandlerStop
 
         self.states.update({ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout)]})
@@ -1700,7 +1595,7 @@ class TestConversationHandler:
         # Start state machine, then reach timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             text="/start",
             from_user=user1,
@@ -1713,7 +1608,7 @@ class TestConversationHandler:
         message.entities[0]._unfreeze()
         brew_message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/brew",
@@ -1744,10 +1639,12 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_handler_timeout_update_and_context(self, app, bot, user1):
+    async def test_conversation_handler_timeout_update_and_context(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
         context = None
 
-        async def start_callback(u, c):
+        async def start_callback(u: Update, c: ContextTypes.DEFAULT_TYPE) -> None:
             nonlocal context, self
             context = c
             return await self.start(u, c)
@@ -1755,7 +1652,7 @@ class TestConversationHandler:
         # Start state machine, then reach timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1768,7 +1665,7 @@ class TestConversationHandler:
         message.entities[0]._unfreeze()
         update = Update(update_id=0, message=message)
 
-        async def timeout_callback(u, c):
+        async def timeout_callback(u: Update, c: ContextTypes.DEFAULT_TYPE) -> None:
             nonlocal update, context
             assert u is update
             assert c is context
@@ -1778,7 +1675,7 @@ class TestConversationHandler:
         states = self.states
         timeout_handler = CommandHandler("start", timeout_callback)
         states.update({ConversationHandler.TIMEOUT: [timeout_handler]})
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[CommandHandler("start", start_callback)],
                 states=states,
@@ -1801,8 +1698,10 @@ class TestConversationHandler:
             await app.stop()
 
     @pytest.mark.flaky(3, 1)
-    async def test_conversation_timeout_keeps_extending(self, app, bot, user1):
-        handler = ConversationHandler(
+    async def test_conversation_timeout_keeps_extending(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1822,7 +1721,7 @@ class TestConversationHandler:
         # t=1.1 actual timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1863,8 +1762,10 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_timeout_two_users(self, app, bot, user1, user2):
-        handler = ConversationHandler(
+    async def test_conversation_timeout_two_users(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -1878,7 +1779,7 @@ class TestConversationHandler:
         # Start state machine, do something as second user, then reach timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1919,7 +1820,9 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_handler_timeout_state(self, app, bot, user1):
+    async def test_conversation_handler_timeout_state(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
         states = self.states
         states.update(
             {
@@ -1929,7 +1832,7 @@ class TestConversationHandler:
                 ]
             }
         )
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=states,
@@ -1943,7 +1846,7 @@ class TestConversationHandler:
         # CommandHandler timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -1997,7 +1900,9 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_handler_timeout_state_context(self, app, bot, user1):
+    async def test_conversation_handler_timeout_state_context(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
         states = self.states
         states.update(
             {
@@ -2007,7 +1912,7 @@ class TestConversationHandler:
                 ]
             }
         )
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=states,
@@ -2021,7 +1926,7 @@ class TestConversationHandler:
         # CommandHandler timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -2074,7 +1979,9 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_timeout_cancel_conflict(self, app, bot, user1):
+    async def test_conversation_timeout_cancel_conflict(
+        self, app: Application, bot: Bot, user1: User
+    ) -> None:
         # Start state machine, wait half the timeout,
         # then call a callback that takes more than the timeout
         # t=0 /start (timeout=.5)
@@ -2083,7 +1990,7 @@ class TestConversationHandler:
         # |  t=.75 /slowbrew returns (timeout=1.25)
         # t=1.25 timeout
 
-        async def slowbrew(_update, context):
+        async def slowbrew(_: Any, __: Any) -> None:
             await asyncio.sleep(0.25)
             # Let's give to the original timeout a chance to execute
             await asyncio.sleep(0.25)
@@ -2094,7 +2001,7 @@ class TestConversationHandler:
         states[self.THIRSTY].append(CommandHandler("slowbrew", slowbrew))
         states.update({ConversationHandler.TIMEOUT: [MessageHandler(None, self.passout2)]})
 
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=states,
@@ -2108,7 +2015,7 @@ class TestConversationHandler:
         # CommandHandler timeout
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -2142,7 +2049,9 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_nested_conversation_handler(self, app, bot, user1, user2):
+    async def test_nested_conversation_handler(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
         self.nested_states[self.DRINKING] = [
             ConversationHandler(
                 conversation_states=ConversationStates(
@@ -2153,7 +2062,7 @@ class TestConversationHandler:
                 )
             )
         ]
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.nested_states,
@@ -2166,7 +2075,7 @@ class TestConversationHandler:
         # User one, starts the state machine.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             from_user=user1,
             text="/start",
@@ -2273,7 +2182,9 @@ class TestConversationHandler:
             message.entities[0].length = len("/start")
             assert handler.check_update(Update(0, message=message))
 
-    async def test_nested_conversation_application_handler_stop(self, app, bot, user1, user2):
+    async def test_nested_conversation_application_handler_stop(
+        self, app: Application, bot: Bot, user1: User, user2: User
+    ) -> None:
         self.nested_states[self.DRINKING] = [
             ConversationHandler(
                 conversation_states=ConversationStates(
@@ -2284,7 +2195,7 @@ class TestConversationHandler:
                 )
             )
         ]
-        handler = ConversationHandler(
+        handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.nested_states,
@@ -2293,17 +2204,17 @@ class TestConversationHandler:
             )
         )
 
-        def test_callback(u, c):
+        async def callback(_: Any, __: Any) -> None:
             self.test_flag = True
 
         app.add_handler(handler)
-        app.add_handler(TypeHandler(Update, test_callback), group=1)
+        app.add_handler(TypeHandler(Update, callback), group=1)
         self.raise_app_handler_stop = True
 
         # User one, starts the state machine.
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             text="/start",
             from_user=user1,
@@ -2428,16 +2339,18 @@ class TestConversationHandler:
             assert not self.test_flag
 
     @pytest.mark.parametrize("callback_raises", [True, False])
-    async def test_timeout_non_block(self, app, user1, callback_raises):
+    async def test_timeout_non_block(
+        self, app: Application, user1: User, callback_raises: bool
+    ) -> None:
         event = asyncio.Event()
 
-        async def callback(_, __):
+        async def callback(_: Any, __: Any) -> int:
             await event.wait()
             if callback_raises:
                 raise RuntimeError
             return 1
 
-        conv_handler = ConversationHandler(
+        conv_handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[MessageHandler(filters.ALL, callback=callback, block=False)],
                 states={
@@ -2454,7 +2367,7 @@ class TestConversationHandler:
 
             message = Message(
                 0,
-                None,
+                datetime.datetime.now(),
                 self.group,
                 text="/start",
                 from_user=user1,
@@ -2471,8 +2384,8 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_no_timeout_on_end(self, app, user1):
-        conv_handler = ConversationHandler(
+    async def test_no_timeout_on_end(self, app: Application, user1: User) -> None:
+        conv_handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[MessageHandler(filters.ALL, callback=self.start_end)],
                 states={ConversationHandler.TIMEOUT: [TypeHandler(Update, self.passout2)]},
@@ -2486,7 +2399,7 @@ class TestConversationHandler:
 
             message = Message(
                 0,
-                None,
+                datetime.datetime.now(),
                 self.group,
                 text="/start",
                 from_user=user1,
@@ -2498,9 +2411,9 @@ class TestConversationHandler:
 
             await app.stop()
 
-    async def test_conversation_handler_block_dont_override(self, app):
+    async def test_conversation_handler_block_dont_override(self, app: Application) -> None:
         """This just makes sure that we don't change any attributes of the handlers of the conv"""
-        conv_handler = ConversationHandler(
+        conv_handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=self.entry_points,
                 states=self.states,
@@ -2542,11 +2455,16 @@ class TestConversationHandler:
     @pytest.mark.parametrize("handler_block", [True, False, None])
     @pytest.mark.parametrize("ext_bot", [True, False], ids=["ExtBot", "Bot"])
     async def test_blocking_resolution_order(
-        self, bot_info, default_block, ch_block, handler_block, ext_bot
-    ):
+        self,
+        bot_info: dict,
+        default_block: bool,
+        ch_block: bool,
+        handler_block: bool,
+        ext_bot: bool,
+    ) -> None:
         event = asyncio.Event()
 
-        async def callback(_, __):
+        async def callback(_: Any, __: Any) -> int:
             await event.wait()
             event.clear()
             self.test_flag = True
@@ -2562,7 +2480,7 @@ class TestConversationHandler:
         defaults = Defaults(block=default_block) if default_block is not None else None
 
         if ch_block is not None:
-            conv_handler = ConversationHandler(
+            conv_handler: ConversationHandler = ConversationHandler(
                 conversation_states=ConversationStates(
                     entry_points=[handler],
                     states={1: [handler]},
@@ -2626,23 +2544,23 @@ class TestConversationHandler:
                 assert self.test_flag
                 self.test_flag = False
 
-    async def test_waiting_state(self, app, user1):
+    async def test_waiting_state(self, app: Application, user1: User) -> None:
         event = asyncio.Event()
 
-        async def callback_1(_, __):
+        async def callback_1(_: Any, __: Any) -> None:
             self.test_flag = 1
 
-        async def callback_2(_, __):
+        async def callback_2(_: Any, __: Any) -> None:
             self.test_flag = 2
 
-        async def callback_3(_, __):
+        async def callback_3(_: Any, __: Any) -> None:
             self.test_flag = 3
 
-        async def blocking(_, __):
+        async def blocking(_: Any, __: Any) -> int:
             await event.wait()
             return 1
 
-        conv_handler = ConversationHandler(
+        conv_handler: ConversationHandler = ConversationHandler(
             conversation_states=ConversationStates(
                 entry_points=[MessageHandler(filters.ALL, callback=blocking, block=False)],
                 states={
@@ -2658,7 +2576,7 @@ class TestConversationHandler:
 
         message = Message(
             0,
-            None,
+            datetime.datetime.now(),
             self.group,
             text="/start",
             from_user=user1,

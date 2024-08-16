@@ -148,8 +148,12 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
         from telegram.ext import (  # pylint: disable=import-outside-toplevel
             InlineQueryHandler,
             PollAnswerHandler,
+            PollHandler,
             PreCheckoutQueryHandler,
             ShippingQueryHandler,
+            StringCommandHandler,
+            StringRegexHandler,
+            TypeHandler,
         )
 
         # this link will be added to all warnings tied to per_* setting
@@ -188,5 +192,25 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
             warn(
                 "If 'per_message=False', 'CallbackQueryHandler' will not be "
                 f"tracked for every message.{per_faq_link}",
+                stacklevel=2,
+            )
+
+        elif isinstance(handler, (StringCommandHandler, StringRegexHandler)):
+            warn(
+                "The `ConversationHandler` only handles updates of type `telegram.Update`. "
+                f"{handler.__class__.__name__} handles updates of type `str`.",
+                stacklevel=2,
+            )
+        elif isinstance(handler, TypeHandler) and not issubclass(handler.type, Update):
+            warn(
+                "The `ConversationHandler` only handles updates of type `telegram.Update`."
+                f" The TypeHandler is set to handle {handler.type.__name__}.",
+                stacklevel=2,
+            )
+        elif isinstance(handler, PollHandler):
+            warn(
+                "PollHandler will never trigger in a conversation since it has no information "
+                "about the chat or the user who voted in it. Do you mean the "
+                "`PollAnswerHandler`?",
                 stacklevel=2,
             )

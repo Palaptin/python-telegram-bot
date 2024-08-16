@@ -48,7 +48,7 @@ class TestConversationStates:
         pre_fallbacks: list = []
         fallbacks: list = []
         map_to_parent: dict = {}
-        allow_reentry = True
+        allow_reentry = "allow_reentry"
 
         recwarn.clear()
         cs: ConversationStates = ConversationStates(
@@ -58,7 +58,7 @@ class TestConversationStates:
             pre_fallbacks=pre_fallbacks,
             fallbacks=fallbacks,
             map_to_parent=map_to_parent,
-            allow_reentry=allow_reentry,
+            allow_reentry=allow_reentry,  # type: ignore
         )
         assert str(recwarn[0].message) == (
             "The END state (-1) is reserved and shouldn't be used as a state name in the "

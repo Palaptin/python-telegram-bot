@@ -36,16 +36,13 @@ from telegram.ext._handlers._conversationhandler.conversationhandlerkey import (
 )
 from telegram.ext._handlers._conversationhandler.pendingstate import PendingState
 from telegram.ext._handlers.basehandler import BaseHandler
-from telegram.ext._handlers.stringcommandhandler import StringCommandHandler
-from telegram.ext._handlers.stringregexhandler import StringRegexHandler
-from telegram.ext._handlers.typehandler import TypeHandler
 from telegram.ext._utils.trackingdict import TrackingDict
 from telegram.ext._utils.types import CCT, COD, ConversationDict, ConversationKey
 
 if TYPE_CHECKING:
     from telegram.ext import Application, Job, JobQueue
     from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
-_CheckUpdateType = Tuple[object, ConversationKey, BaseHandler[Update, CCT], object]
+_CheckUpdateType = Tuple[object, ConversationKey, BaseHandler[object, CCT], object]
 
 _LOGGER = get_logger(__name__, class_name="ConversationHandler")
 
@@ -59,12 +56,12 @@ class _ConversationTimeoutContext(Generic[CCT]):
     __slots__ = ("application", "callback_context", "conversation_key", "update")
 
     conversation_key: ConversationKey
-    update: Update
+    update: object
     application: "Application[Any, CCT, Any, Any, Any, JobQueue]"
     callback_context: CCT
 
 
-class ConversationHandler(BaseHandler[Update, CCT]):
+class ConversationHandler(BaseHandler[object, CCT]):
     """
     A handler to hold a conversation with a single or multiple users through Telegram updates by
     managing three collections of other handlers.
@@ -241,7 +238,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     ):
         # these imports need to be here because of circular import error otherwise
         # pylint: disable=import-outside-toplevel
-        from telegram.ext import PollHandler
         from telegram.ext._handlers._conversationhandler.defaultconversationhandlerkey import (
             DefaultConversationHandlerKey,
         )
@@ -275,25 +271,6 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         # this loop is going to warn the user about handlers which can work unexpectedly
         # in conversations
         for handler in self.available_states.get_all_handlers():
-            if isinstance(handler, (StringCommandHandler, StringRegexHandler)):
-                warn(
-                    "The `ConversationHandler` only handles updates of type `telegram.Update`. "
-                    f"{handler.__class__.__name__} handles updates of type `str`.",
-                    stacklevel=2,
-                )
-            elif isinstance(handler, TypeHandler) and not issubclass(handler.type, Update):
-                warn(
-                    "The `ConversationHandler` only handles updates of type `telegram.Update`."
-                    f" The TypeHandler is set to handle {handler.type.__name__}.",
-                    stacklevel=2,
-                )
-            elif isinstance(handler, PollHandler):
-                warn(
-                    "PollHandler will never trigger in a conversation since it has no information "
-                    "about the chat or the user who voted in it. Do you mean the "
-                    "`PollAnswerHandler`?",
-                    stacklevel=2,
-                )
 
             if self.conversation_timeout and isinstance(handler, self.__class__):
                 warn(
@@ -433,7 +410,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self,
         new_state: object,
         application: "Application[Any, CCT, Any, Any, Any, JobQueue]",
-        update: Update,
+        update: object,
         context: CCT,
         conversation_key: ConversationKey,
         current_conversation: ConversationData,
@@ -457,7 +434,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                 job_kwargs=timeout_job_kwargs,
             )
             self.timeout_jobs[conversation_key] = t_job
-            current_conversation.set_update(update)
+            current_conversation.update = update
             if t_job.job.pending:
                 # job don't know the next run time on application startup.
                 current_conversation.timeout = timeout
@@ -552,7 +529,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
 
     async def handle_update(  # type: ignore[override]
         self,
-        update: Update,
+        update: object,
         application: "Application[Any, CCT, Any, Any, Any, Any]",
         check_result: _CheckUpdateType[CCT],
         context: CCT,
@@ -597,7 +574,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
             if timeout_job is not None:
                 timeout_job.schedule_removal()
             current_conversation.timeout = None
-            current_conversation.set_update(None)
+            current_conversation.update = None
 
         # Resolution order of "block":
         # 1. Setting of the selected handler
@@ -618,12 +595,13 @@ class ConversationHandler(BaseHandler[Update, CCT]):
                     update, application, handler_check_result, context
                 )
             else:
+                update_id = update.update_id if isinstance(update, Update) else None
                 new_state = application.create_task(
                     coroutine=handler.handle_update(
                         update, application, handler_check_result, context
                     ),
                     update=update,
-                    name=f"ConversationHandler:{update.update_id}:handle_update:non_blocking_cb",
+                    name=f"ConversationHandler:{update_id}:handle_update:non_blocking_cb",
                 )
         except ApplicationHandlerStop as exception:
             new_state = exception.state
@@ -669,7 +647,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         self,
         new_state: object,
         conversation_data: ConversationData,
-        update: Update,
+        update: object,
         context: CCT,
         block: DVType[bool],
         application: "Application",
@@ -804,7 +782,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
     async def _execute_state_entry_handlers(
         self,
         new_state: object,
-        update: Update,
+        update: object,
         context: CCT,
         application: "Application",
     ) -> Optional[object]:
@@ -835,7 +813,7 @@ class ConversationHandler(BaseHandler[Update, CCT]):
         for key, conversation_data in stored_conversations.items():
             if conversation_data.state is None:
                 continue
-            update = conversation_data.update_as_object(application.bot)
+            update = conversation_data.update
             if update is None:
                 continue
             context = application.context_types.context.from_update(

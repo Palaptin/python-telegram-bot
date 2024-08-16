@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 
-from telegram import Bot, Update
+from telegram import Update
 from telegram.ext import ConversationData
 from tests.auxil.slots import mro_slots
 
@@ -51,7 +51,7 @@ class TestConversationData:
         assert self.cd.key is self.key
         assert self.cd.state == self.state
         assert self.cd.timeout == self.timeout
-        assert self.cd.json_update == self.update.to_json()
+        assert self.cd.update == self.update
         assert self.cd.conversation_context_data is self.conversation_context_data
 
     def test_init_default_values(self) -> None:
@@ -64,21 +64,8 @@ class TestConversationData:
         assert cd.key is key
         assert cd.state == state
         assert cd.timeout is None
-        assert cd.json_update == ""
+        assert cd.update is None
         assert cd.conversation_context_data == {}
-
-    def test_set_update(self) -> None:
-        cd: ConversationData = ConversationData(key=(1, 1), state=2)
-        update = Update(1)
-        cd.set_update(update=update)
-        assert cd.json_update == '{"update_id": 1}'
-        cd.set_update(update=None)
-        assert cd.json_update == ""
-
-    def test_update_as_object(self, bot: Bot) -> None:
-        update = Update(update_id=1)
-        cd: ConversationData = ConversationData(key=(1, 1), state=2, update=update)
-        assert cd.update_as_object(bot) == update
 
     def test_copy(self) -> None:
 
@@ -93,5 +80,5 @@ class TestConversationData:
             "key": (1, 2),
             "state": 3,
             "timeout": 4,
-            "update": '{"update_id": 1}',
+            "update": {"update_id": 1},
         }

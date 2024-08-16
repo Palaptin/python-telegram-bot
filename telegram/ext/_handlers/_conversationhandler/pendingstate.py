@@ -21,7 +21,6 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
-from telegram import Update
 from telegram._utils.logging import get_logger
 from telegram._utils.types import DVType
 from telegram.ext._handlers._conversationhandler.conversationdata import ConversationData
@@ -60,7 +59,7 @@ class PendingState:
         conv_handler: "ConversationHandler",
         conversation_data: ConversationData,
         handler: Optional["BaseHandler"],
-        update: Update,
+        update: object,
         context: CCT,
         application: "Application",
         block: DVType[bool],

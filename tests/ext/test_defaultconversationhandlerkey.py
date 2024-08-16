@@ -31,8 +31,12 @@ from telegram.ext import (
     DefaultConversationHandlerKey,
     InlineQueryHandler,
     PollAnswerHandler,
+    PollHandler,
     PreCheckoutQueryHandler,
     ShippingQueryHandler,
+    StringCommandHandler,
+    StringRegexHandler,
+    TypeHandler,
 )
 from telegram.warnings import PTBUserWarning
 from tests.auxil.slots import mro_slots
@@ -41,8 +45,7 @@ from tests.auxil.slots import mro_slots
 class TestDefaultConversationHandlerKey:
 
     async def callback(self, _: Any, __: Any) -> None:
-        # dummy implementation
-        pass
+        return
 
     def test_slot_behaviour(self) -> None:
         default_key = DefaultConversationHandlerKey()
@@ -149,8 +152,45 @@ class TestDefaultConversationHandlerKey:
             + per_faq_link
         )
 
+        # Following are the string_regex, Pollhandler and TypeHandler which should all generate a
+        # warning. TypeHandler should not when the class is Update
+        dk.warn_if_handler_is_invalid(StringCommandHandler("code", self.callback))
+        assert (
+            str(recwarn[7].message)
+            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
+            "StringCommandHandler handles updates of type `str`."
+        )
+        dk.warn_if_handler_is_invalid(StringRegexHandler("code", self.callback))
+        assert (
+            str(recwarn[8].message)
+            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
+            "StringRegexHandler handles updates of type `str`."
+        )
+        dk.warn_if_handler_is_invalid(PollHandler(self.callback))
+        assert (
+            str(recwarn[9].message)
+            == "PollHandler will never trigger in a conversation since it has no information "
+            "about the chat or the user who voted in it. Do you mean the "
+            "`PollAnswerHandler`?"
+        )
+
+        # this class doesn't do anything, it's just not the Update class
+        class NotUpdate:
+            pass
+
+        dk.warn_if_handler_is_invalid(TypeHandler(NotUpdate, self.callback))
+        assert (
+            str(recwarn[10].message)
+            == "The `ConversationHandler` only handles updates of type `telegram.Update`. "
+            "The TypeHandler is set to handle NotUpdate."
+        )
+        dk.warn_if_handler_is_invalid(TypeHandler(Update, self.callback))
+        with pytest.raises(IndexError, match="list index out of range"):
+            # there should be no error
+            _ = recwarn[11]
+
         # Check there ar not more errors
-        assert len(recwarn) == 7
+        assert len(recwarn) == 11
 
         # this for loop checks if the correct stack level is used when generating the warning
         for warning in recwarn:

@@ -1568,7 +1568,7 @@ class TestBasePersistence:
             assert data.state == HandlerStates.STATE_1
             assert data.key == (1, 1)
             assert data.timeout is not None
-            assert data.json_update is not None
+            assert data.update is not None
             papp.persistence.reset_tracking()
             await asyncio.sleep(4)
             # After the timeout the conversation should run the entry point again …
