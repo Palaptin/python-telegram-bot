@@ -71,6 +71,27 @@ class ConversationData(Generic[COD]):
         self.timeout: Optional[Union[float, datetime.timedelta]] = timeout
         self.update = update
 
+    def __eq__(self, other: object) -> bool:
+        """Compares this object with :paramref:`other` in terms of equality.
+        If this object and :paramref:`other` are `not` objects of the same class,
+        this comparison will fall back to Python's default implementation of :meth:`object.__eq__`.
+        The objects are considered to be equal, if all the attributes are equal.
+
+        Args:
+            other (:obj:`object`): The object to compare with.
+
+        Returns:
+            :obj:`bool`
+
+        """
+        if not isinstance(other, self.__class__):
+            return super().__eq__(other)
+
+        # get all values dynamically
+        self_values = [self.__getattribute__(attr) for attr in self.__slots__]
+        others_values = [other.__getattribute__(attr) for attr in other.__slots__]
+        return self_values == others_values
+
     def copy(self) -> "ConversationData":
         """
         Creates a copy of itself.
@@ -94,13 +115,11 @@ class ConversationData(Generic[COD]):
         Returns: a dict with the keys: key, state, timeout, update and conversation_context_data.
 
         """
-        if self.update:
-            if hasattr(self.update, "to_dict"):
-                dict_update: Any = self.update.to_dict()
-            else:
-                dict_update = self.update
+
+        if hasattr(self.update, "to_dict"):
+            dict_update: Any = self.update.to_dict()
         else:
-            dict_update = ""
+            dict_update = self.update
         return {
             "key": self.key,
             "state": self.state,

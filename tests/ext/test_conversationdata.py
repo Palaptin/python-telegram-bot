@@ -16,6 +16,7 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
+from unittest.mock import Mock
 
 from telegram import Update
 from telegram.ext import ConversationData
@@ -75,6 +76,7 @@ class TestConversationData:
 
     def test_to_dict(self) -> None:
 
+        # test all values are present in the dict
         assert self.cd.to_dict() == {
             "conversation_context_data": {1},
             "key": (1, 2),
@@ -82,3 +84,68 @@ class TestConversationData:
             "timeout": 4,
             "update": {"update_id": 1},
         }
+
+        # test empty values are also present
+        cd_minimal: ConversationData = ConversationData(key=(1, 2), state=3)
+        assert cd_minimal.to_dict() == {
+            "conversation_context_data": {},
+            "key": (1, 2),
+            "state": 3,
+            "timeout": None,
+            "update": None,
+        }
+
+        # test a custom update will be present in the dict
+        update = object
+        cd_update_no_to_dict: ConversationData = ConversationData(
+            key=(1, 2), state=3, update=update
+        )
+        assert cd_update_no_to_dict.to_dict() == {
+            "conversation_context_data": {},
+            "key": (1, 2),
+            "state": 3,
+            "timeout": None,
+            "update": update,
+        }
+
+        # test a customs update to_dict return value will be present in the dict
+        dummy_update: Mock = Mock()
+        dummy_update.to_dict.return_value = 42
+        cd_custom_update: ConversationData = ConversationData(
+            key=(1, 2), state=3, update=dummy_update
+        )
+        assert cd_custom_update.to_dict() == {
+            "conversation_context_data": {},
+            "key": (1, 2),
+            "state": 3,
+            "timeout": None,
+            "update": 42,
+        }
+
+        # test conversation_context_data can be something else than dict
+        conversation_context_data = object
+        cd_custom_cod: ConversationData = ConversationData(
+            key=(1, 2), state=3, conversation_context_data=conversation_context_data
+        )
+        assert cd_custom_cod.to_dict() == {
+            "conversation_context_data": conversation_context_data,
+            "key": (1, 2),
+            "state": 3,
+            "timeout": None,
+            "update": None,
+        }
+
+    def test_equality(self) -> None:
+        conv_data1: ConversationData = ConversationData(
+            (1, 1), 1, 1, 1, conversation_context_data={}
+        )
+        conv_data2: ConversationData = ConversationData(
+            (1, 1), 1, 1, 1, conversation_context_data={}
+        )
+        conv_data3: ConversationData = ConversationData(
+            (1, 2), 2, 2, 2, conversation_context_data=[]
+        )
+        object_4 = object
+        assert conv_data1 == conv_data2
+        assert conv_data1 != conv_data3
+        assert conv_data1 != object_4

@@ -24,6 +24,7 @@ import logging
 from copy import copy
 from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import Mock
 from warnings import filterwarnings
 
 import pytest
@@ -350,7 +351,7 @@ class TestConversationHandler:
         # the warning message action needs to be set to always,
         # otherwise only the first occurrence will be issued
         filterwarnings(action="always", category=PTBUserWarning)
-
+        key_builder = Mock(spec=DefaultConversationHandlerKey)
         recwarn.clear()
 
         # adding a nested conv to a conversation with timeout should warn
@@ -382,19 +383,18 @@ class TestConversationHandler:
                 states={
                     self.END: [CallbackQueryHandler(self.code, "code")],
                 },
-                fallbacks=[CallbackQueryHandler(self.code, "code")],
             ),
-            key_builder=DefaultConversationHandlerKey(
-                per_message=True,
-                per_chat=True,
-            ),
+            key_builder=key_builder,
         )
+
+        # Check the key builder also had the possibility to raise warnings.
+        key_builder.warn_if_handler_is_invalid.assert_called()
 
         # the overall number of handlers throwing a warning is 13
         assert len(recwarn) == 2
+
         # now we test the messages, they are raised in the order they are inserted
         # into the conversation handler
-
         assert (
             str(recwarn[0].message)
             == "Using `conversation_timeout` with nested conversations is currently not "
