@@ -178,7 +178,7 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
                 f"Updates handled by {handler.__class__.__name__} only have information about "
                 "the user, so this handler won't ever be triggered if `per_chat=True`."
                 f"{per_faq_link}",
-                stacklevel=2,
+                stacklevel=3,
             )
 
         elif self.per_message and not isinstance(handler, CallbackQueryHandler):
@@ -186,31 +186,31 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
                 "If 'per_message=True', all entry points, pre_fallbacks, state handlers"
                 " and fallbacks must be 'CallbackQueryHandler', since no other handlers "
                 f"have a message context.{per_faq_link}",
-                stacklevel=2,
+                stacklevel=3,
             )
         elif not self.per_message and isinstance(handler, CallbackQueryHandler):
             warn(
                 "If 'per_message=False', 'CallbackQueryHandler' will not be "
                 f"tracked for every message.{per_faq_link}",
-                stacklevel=2,
+                stacklevel=3,
             )
 
         elif isinstance(handler, (StringCommandHandler, StringRegexHandler)):
             warn(
                 "The `ConversationHandler` only handles updates of type `telegram.Update`. "
                 f"{handler.__class__.__name__} handles updates of type `str`.",
-                stacklevel=2,
+                stacklevel=3,
             )
         elif isinstance(handler, TypeHandler) and not issubclass(handler.type, Update):
             warn(
                 "The `ConversationHandler` only handles updates of type `telegram.Update`."
                 f" The TypeHandler is set to handle {handler.type.__name__}.",
-                stacklevel=2,
+                stacklevel=3,
             )
         elif isinstance(handler, PollHandler):
             warn(
                 "PollHandler will never trigger in a conversation since it has no information "
                 "about the chat or the user who voted in it. Do you mean the "
                 "`PollAnswerHandler`?",
-                stacklevel=2,
+                stacklevel=3,
             )

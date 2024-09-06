@@ -82,9 +82,15 @@ class TestDefaultConversationHandlerKey:
         with pytest.raises(AttributeError, match=f"You can not assign a new value to {attr}"):
             setattr(ds, attr, True)
 
-    def test_warn_if_handler_is_invalid(self, recwarn: WarningsRecorder) -> None:
+    @pytest.mark.parametrize("increase_stack", [True, False], indirect=False)
+    def test_warn_if_handler_is_invalid(
+        self, recwarn: WarningsRecorder, increase_stack: bool, recursion: bool = False
+    ) -> None:
         """this function tests all handler + per_* setting combinations."""
-
+        if increase_stack:
+            # increase stack to get wrong stacklevel on the warnings
+            self.test_warn_if_handler_is_invalid(recwarn, False, True)
+            return
         per_faq_link = (
             " Read this FAQ entry to learn more about the per_* settings: "
             "https://github.com/python-telegram-bot/python-telegram-bot/wiki"
@@ -195,7 +201,12 @@ class TestDefaultConversationHandlerKey:
         # this for loop checks if the correct stack level is used when generating the warning
         for warning in recwarn:
             assert warning.category is PTBUserWarning
-            assert warning.filename == __file__, "incorrect stack level!"
+            # stack for warnings is 3 in this handler.
+            if recursion:
+                assert warning.filename == __file__, "incorrect stack level!"
+            else:
+                # If there is no Recursion, the warning will point to the python internal files
+                assert warning.filename != __file__, "incorrect stack level!"
 
     @pytest.mark.parametrize("per_chat", [True, False])
     @pytest.mark.parametrize("per_user", [True, False])

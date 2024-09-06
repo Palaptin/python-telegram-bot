@@ -19,7 +19,7 @@
 """This module contains the PendingState."""
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from telegram._utils.logging import get_logger
 from telegram._utils.types import DVType
@@ -58,7 +58,7 @@ class PendingState:
         task: asyncio.Task,
         conv_handler: "ConversationHandler",
         conversation_data: ConversationData,
-        handler: Optional["BaseHandler"],
+        handler: Optional["BaseHandler[Any, CCT]"],
         update: object,
         context: CCT,
         application: "Application",
