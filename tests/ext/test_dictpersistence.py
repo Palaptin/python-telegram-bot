@@ -32,27 +32,27 @@ def _reset_callback_data_cache(cdc_bot):
     cdc_bot.callback_data_cache.clear_callback_queries()
 
 
-@pytest.fixture()
+@pytest.fixture
 def bot_data():
     return {"test1": "test2", "test3": {"test4": "test5"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def chat_data():
     return {-12345: {"test1": "test2", "test3": {"test4": "test5"}}, -67890: {3: "test4"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def user_data():
     return {12345: {"test1": "test2", "test3": {"test4": "test5"}}, 67890: {3: "test4"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def callback_data():
     return [("test1", 1000, {"button1": "test0", "button2": "test1"})], {"test1": "test2"}
 
 
-@pytest.fixture()
+@pytest.fixture
 def conversations():
     name_1_1 = ConversationData(key=(123, 123), state=3, timeout=None, update=None)
     name_1_2 = ConversationData(key=(456, 654), state=4, timeout=None, update=None)
@@ -67,27 +67,27 @@ def conversations():
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def user_data_json(user_data):
     return json.dumps(user_data)
 
 
-@pytest.fixture()
+@pytest.fixture
 def chat_data_json(chat_data):
     return json.dumps(chat_data)
 
 
-@pytest.fixture()
+@pytest.fixture
 def bot_data_json(bot_data):
     return json.dumps(bot_data)
 
 
-@pytest.fixture()
+@pytest.fixture
 def callback_data_json(callback_data):
     return json.dumps(callback_data)
 
 
-@pytest.fixture()
+@pytest.fixture
 def conversations_json(conversations):
     return """{"name1": {"[123, 123]": {"key": "[123, 123]", "state": 3, "timeout": null,
         "update": null, "conversation_context_data":null}, "[456, 654]": {"key": "[456, 654]",

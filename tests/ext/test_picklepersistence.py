@@ -52,27 +52,27 @@ def _reset_callback_data_cache(cdc_bot):
     cdc_bot.callback_data_cache.clear_callback_queries()
 
 
-@pytest.fixture()
+@pytest.fixture
 def bot_data():
     return {"test1": "test2", "test3": {"test4": "test5"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def chat_data():
     return {-12345: {"test1": "test2", "test3": {"test4": "test5"}}, -67890: {3: "test4"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def user_data():
     return {12345: {"test1": "test2", "test3": {"test4": "test5"}}, 67890: {3: "test4"}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def callback_data():
     return [("test1", 1000, {"button1": "test0", "button2": "test1"})], {"test1": "test2"}
 
 
-@pytest.fixture()
+@pytest.fixture
 def conversations():
     return {
         "name1": {
@@ -90,7 +90,7 @@ def conversations():
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_persistence():
     return PicklePersistence(
         filepath="pickletest",
@@ -99,7 +99,7 @@ def pickle_persistence():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_persistence_only_bot():
     return PicklePersistence(
         filepath="pickletest",
@@ -109,7 +109,7 @@ def pickle_persistence_only_bot():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_persistence_only_chat():
     return PicklePersistence(
         filepath="pickletest",
@@ -119,7 +119,7 @@ def pickle_persistence_only_chat():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_persistence_only_user():
     return PicklePersistence(
         filepath="pickletest",
@@ -129,7 +129,7 @@ def pickle_persistence_only_user():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_persistence_only_callback():
     return PicklePersistence(
         filepath="pickletest",
@@ -139,7 +139,7 @@ def pickle_persistence_only_callback():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def bad_pickle_files():
     for name in [
         "pickletest_user_data",
@@ -153,7 +153,7 @@ def bad_pickle_files():
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def invalid_pickle_files():
     for name in [
         "pickletest_user_data",
@@ -170,7 +170,7 @@ def invalid_pickle_files():
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def good_pickle_files(user_data, chat_data, bot_data, callback_data, conversations):
     data = {
         "user_data": user_data,
@@ -194,7 +194,7 @@ def good_pickle_files(user_data, chat_data, bot_data, callback_data, conversatio
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_files_wo_bot_data(user_data, chat_data, callback_data, conversations):
     data = {
         "user_data": user_data,
@@ -215,7 +215,7 @@ def pickle_files_wo_bot_data(user_data, chat_data, callback_data, conversations)
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def pickle_files_wo_callback_data(user_data, chat_data, bot_data, conversations):
     data = {
         "user_data": user_data,
@@ -236,7 +236,7 @@ def pickle_files_wo_callback_data(user_data, chat_data, bot_data, conversations)
     return True
 
 
-@pytest.fixture()
+@pytest.fixture
 def update(bot):
     user = User(id=321, first_name="test_user", is_bot=False)
     chat = Chat(id=123, type="group")
