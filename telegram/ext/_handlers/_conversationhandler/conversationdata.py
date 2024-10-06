@@ -65,7 +65,6 @@ class ConversationData(Generic[COD]):
             self.conversation_context_data: COD = {}  # type: ignore
         else:
             self.conversation_context_data = conversation_context_data
-
         self.key: ConversationKey = key
         self.state: object = state
         self.timeout: Optional[Union[float, datetime.timedelta]] = timeout

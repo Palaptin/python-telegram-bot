@@ -94,7 +94,7 @@ def raise_ahs(func: Callable) -> Callable:
     return decorator
 
 
-class TestConversationHandler:
+class TestConversationHandlerWithoutRequest:
     """Persistence of conversations is tested in test_basepersistence.py"""
 
     # State definitions
@@ -229,7 +229,7 @@ class TestConversationHandler:
     @raise_ahs
     async def try_to_prevent_end(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
         self.state_entry_entered = True
-        return self._set_state(update, self.THIRSTY)
+        return self._set_state(update, self.CODING)
 
     @raise_ahs
     async def drink(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> object:
@@ -424,9 +424,9 @@ class TestConversationHandler:
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
-            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
-            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
-            "'c': [CommandHandler[callback=TestConversationHandler.hold]]}]"
+            "states={'a': [CommandHandler[callback=TestConversationHandlerWithoutRequest.sip]], "
+            "'b': [CommandHandler[callback=TestConversationHandlerWithoutRequest.swallow]], "
+            "'c': [CommandHandler[callback=TestConversationHandlerWithoutRequest.hold]]}]"
         )
 
     def test_repr_with_truncation(self) -> None:
@@ -444,9 +444,9 @@ class TestConversationHandler:
         )
         assert repr(ch) == (
             "ConversationHandler[name=test_handler, "
-            "states={'a': [CommandHandler[callback=TestConversationHandler.sip]], "
-            "'b': [CommandHandler[callback=TestConversationHandler.swallow]], "
-            "'c': [CommandHandler[callback=TestConversationHandler.hold]], ...}]"
+            "states={'a': [CommandHandler[callback=TestConversationHandlerWithoutRequest.sip]], "
+            "'b': [CommandHandler[callback=TestConversationHandlerWithoutRequest.swallow]], "
+            "'c': [CommandHandler[callback=TestConversationHandlerWithoutRequest.hold]], ...}]"
         )
 
     async def test_check_update_returns_non(self, app: Application, user1: User) -> None:
@@ -664,30 +664,14 @@ class TestConversationHandler:
             assert self.state_entry_entered is True
             assert self.current_state[user1.id] == self.THIRSTY
 
-            # Now we want to end, but the state_entry_handler try to prevent this.
+            # Now we want to end, but the state_entry_handler prevents this.
             # But he shouldn't be able to change the END state.
             self.state_entry_entered = False
             message.text = "/end"
             message.entities[0].length = len("/end")
             await app.process_update(Update(update_id=0, message=message))
             assert self.state_entry_entered is True
-            assert len(recwarn) == 1
-            assert recwarn[0].category is PTBUserWarning
-            assert (
-                Path(recwarn[0].filename)
-                == PROJECT_ROOT_PATH
-                / "telegram"
-                / "ext"
-                / "_handlers"
-                / "_conversationhandler"
-                / "conversationhandler.py"
-            ), "wrong stacklevel!"
-            assert (
-                str(recwarn[0].message)
-                == "State END (-1) can not be changed by state_entry_handlers."
-            )
-            # check the conversation is really ended.
-            assert len(handler._conversations) == 0
+            assert self.current_state[user1.id] == self.CODING
 
     async def test_conversation_handler_fallback(
         self, app: Application, bot: Bot, user1: User, user2: User
@@ -2087,50 +2071,52 @@ class TestConversationHandler:
         message._unfreeze()
         message.entities[0]._unfreeze()
         async with app:
+            # entry point
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.THIRSTY
 
-            # The user is thirsty and wants to brew coffee.
+            # The user is thirsty and wants to brew coffee. (state THIRSTY)
             message.text = "/brew"
             message.entities[0].length = len("/brew")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.BREWING
 
-            # Lets pour some coffee.
+            # Lets pour some coffee. (state BREWING)
             message.text = "/pourCoffee"
             message.entities[0].length = len("/pourCoffee")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.DRINKING
 
-            # The user is holding the cup
+            # The user is holding the cup (nested state DRINKING entry point)
             message.text = "/hold"
             message.entities[0].length = len("/hold")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.HOLDING
 
-            # The user is sipping coffee
+            # The user is sipping coffee (nested state HOLDING)
             message.text = "/sip"
             message.entities[0].length = len("/sip")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.SIPPING
 
-            # The user is swallowing
+            # The user is swallowing (nested state SIPPING)
             message.text = "/swallow"
             message.entities[0].length = len("/swallow")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.SWALLOWING
 
-            # The user is holding the cup again
+            # The user is holding the cup again (nested state SWALLOWING)
             message.text = "/hold"
             message.entities[0].length = len("/hold")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.HOLDING
 
-            # The user wants to replenish the coffee supply
+            # The user wants to replenish the coffee supply (nested state HOLDING, but fallback)
             message.text = "/replenish"
             message.entities[0].length = len("/replenish")
             await app.process_update(Update(update_id=0, message=message))
             assert self.current_state[user1.id] == self.REPLENISHING
+            # State is mapping us to the Parent state BREWING
             # check that we're in the right state now by checking that the update is accepted
             message.text = "/pourCoffee"
             message.entities[0].length = len("/pourCoffee")

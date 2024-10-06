@@ -100,7 +100,7 @@ def conversations_json(conversations):
         "timeout": null, "update": null, "conversation_context_data":null}}}"""
 
 
-class TestDictPersistence:
+class TestDictPersistenceWithoutRequest:
     """Just tests the DictPersistence interface. Integration of persistence into Applictation
     is tested in TestBasePersistence!"""
 

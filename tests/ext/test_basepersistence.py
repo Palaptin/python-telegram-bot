@@ -328,7 +328,7 @@ papp_store_all_or_none = pytest.mark.parametrize(
 )
 
 
-class TestBasePersistence:
+class TestBasePersistenceWithoutRequest:
     """Tests basic behavior of BasePersistence and (most importantly) the integration of
     persistence into the Application."""
 

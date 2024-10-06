@@ -18,9 +18,9 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the ConversationHandlerKey."""
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from telegram.ext._utils.types import ConversationKey
+from telegram.ext._utils.types import CCT, ConversationKey
 
 if TYPE_CHECKING:
     from telegram.ext import BaseHandler
@@ -43,7 +43,7 @@ class ConversationHandlerKey(ABC):
         """
 
     @abstractmethod
-    def warn_if_handler_is_invalid(self, handler: "BaseHandler") -> None:
+    def warn_if_handler_is_invalid(self, handler: "BaseHandler[Any, CCT, object]") -> None:
         """Checks if the Handler is supported with this ConversationHandlerKey. If not, raise a
         Warning. This method will be called on the  initialization of :obj:`ConversationHandler`
         with all added handlers.

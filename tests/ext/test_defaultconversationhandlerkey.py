@@ -42,7 +42,7 @@ from telegram.warnings import PTBUserWarning
 from tests.auxil.slots import mro_slots
 
 
-class TestDefaultConversationHandlerKey:
+class TestDefaultConversationHandlerKeyWithoutRequest:
 
     async def callback(self, _: Any, __: Any) -> None:
         return

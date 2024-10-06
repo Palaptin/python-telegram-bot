@@ -23,6 +23,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    ConversationStates,
     MessageHandler,
     filters,
 )
@@ -121,27 +122,30 @@ def main() -> None:
 
     # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            CHOOSING: [
-                MessageHandler(
-                    filters.Regex("^(Age|Favourite colour|Number of siblings)$"), regular_choice
-                ),
-                MessageHandler(filters.Regex("^Something else...$"), custom_choice),
-            ],
-            TYPING_CHOICE: [
-                MessageHandler(
-                    filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")), regular_choice
-                )
-            ],
-            TYPING_REPLY: [
-                MessageHandler(
-                    filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")),
-                    received_information,
-                )
-            ],
-        },
-        fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+        conversation_states=ConversationStates(
+            entry_points=[CommandHandler("start", start)],
+            states={
+                CHOOSING: [
+                    MessageHandler(
+                        filters.Regex("^(Age|Favourite colour|Number of siblings)$"),
+                        regular_choice,
+                    ),
+                    MessageHandler(filters.Regex("^Something else...$"), custom_choice),
+                ],
+                TYPING_CHOICE: [
+                    MessageHandler(
+                        filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")), regular_choice
+                    )
+                ],
+                TYPING_REPLY: [
+                    MessageHandler(
+                        filters.TEXT & ~(filters.COMMAND | filters.Regex("^Done$")),
+                        received_information,
+                    )
+                ],
+            },
+            fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+        )
     )
 
     application.add_handler(conv_handler)

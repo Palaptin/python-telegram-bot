@@ -24,7 +24,7 @@ from telegram.ext import ConversationHandler, ConversationStates
 from tests.auxil.slots import mro_slots
 
 
-class TestConversationStates:
+class TestConversationStatesWithoutRequest:
 
     @staticmethod
     def get_conversation_handler() -> ConversationHandler:

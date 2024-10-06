@@ -18,26 +18,21 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 from unittest.mock import Mock
 
+import pytest
+
 from telegram import Update
 from telegram.ext import ConversationData
 from tests.auxil.slots import mro_slots
 
 
-class TestConversationData:
-
-    key = (1, 2)
-    state = 3
-    timeout = 4
-    update = Update(update_id=1)
-    conversation_context_data = {1}
-
-    cd: ConversationData = ConversationData(
-        key=key,
-        state=state,
-        timeout=timeout,
-        update=update,
-        conversation_context_data=conversation_context_data,
+@pytest.fixture
+def conversation_data() -> ConversationData:
+    return ConversationData(
+        key=(1, 2), state=3, timeout=4, update=Update(update_id=1), conversation_context_data={1}
     )
+
+
+class TestConversationDataWithoutRequest:
 
     def test_slot_behaviour(self) -> None:
         conversation_data: ConversationData = ConversationData((1, 1), None)
@@ -47,55 +42,53 @@ class TestConversationData:
             set(mro_slots(conversation_data))
         ), "duplicate slot"
 
-    def test_init(self) -> None:
-
-        assert self.cd.key is self.key
-        assert self.cd.state == self.state
-        assert self.cd.timeout == self.timeout
-        assert self.cd.update == self.update
-        assert self.cd.conversation_context_data is self.conversation_context_data
+    def test_init(self, conversation_data: ConversationData) -> None:
+        assert conversation_data.key == (1, 2)
+        assert conversation_data.state == 3
+        assert conversation_data.timeout == 4
+        assert conversation_data.update == Update(update_id=1)
+        assert conversation_data.conversation_context_data == {1}
 
     def test_init_default_values(self) -> None:
-
-        key = (1, 2)
-        state = 3
-
-        cd: ConversationData = ConversationData(key=key, state=state)
-
-        assert cd.key is key
-        assert cd.state == state
+        cd: ConversationData = ConversationData(key=(1, 2), state=3)
+        assert cd.key == (1, 2)
+        assert cd.state == 3
         assert cd.timeout is None
         assert cd.update is None
-        assert cd.conversation_context_data == {}
+        assert (
+            cd.conversation_context_data == {}
+        ), "Default conversation_context_data should be an empty dictionary"
 
-    def test_copy(self) -> None:
+    def test_copy(self, conversation_data: ConversationData) -> None:
+        """Tests if a copy is not the same object, but equal to the original object"""
+        copy = conversation_data.copy()
+        assert copy == conversation_data, "The copied instance should be equal to the original"
+        assert copy is not conversation_data, "The copied instance should not be the same object"
 
-        copy = self.cd.copy()
-        assert copy == self.cd
-        assert copy is not self.cd
+    def test_to_dict(self, conversation_data: ConversationData) -> None:
+        """Tests the conversion of the ConversationData into a dictionary."""
 
-    def test_to_dict(self) -> None:
-
-        # test all values are present in the dict
-        assert self.cd.to_dict() == {
-            "conversation_context_data": {1},
+        # Test all values are present in the dict
+        dict_rep = conversation_data.to_dict()
+        assert dict_rep == {
             "key": (1, 2),
             "state": 3,
             "timeout": 4,
             "update": {"update_id": 1},
+            "conversation_context_data": {1},
         }
 
-        # test empty values are also present
+        # Test with minimal values
         cd_minimal: ConversationData = ConversationData(key=(1, 2), state=3)
         assert cd_minimal.to_dict() == {
-            "conversation_context_data": {},
             "key": (1, 2),
             "state": 3,
             "timeout": None,
             "update": None,
+            "conversation_context_data": {},
         }
 
-        # test a custom update will be present in the dict
+        # Test a custom update will be present in the dict if it has no to_dict method
         update = object
         cd_update_no_to_dict: ConversationData = ConversationData(
             key=(1, 2), state=3, update=update
@@ -109,17 +102,18 @@ class TestConversationData:
         }
 
         # test a customs update to_dict return value will be present in the dict
-        dummy_update: Mock = Mock()
+        dummy_update = Mock()
         dummy_update.to_dict.return_value = 42
-        cd_custom_update: ConversationData = ConversationData(
+        cd_with_mock_update: ConversationData = ConversationData(
             key=(1, 2), state=3, update=dummy_update
         )
-        assert cd_custom_update.to_dict() == {
-            "conversation_context_data": {},
+
+        assert cd_with_mock_update.to_dict() == {
             "key": (1, 2),
             "state": 3,
             "timeout": None,
-            "update": 42,
+            "update": 42,  # The expected mock result from .to_dict of the update object
+            "conversation_context_data": {},
         }
 
         # test conversation_context_data can be something else than dict

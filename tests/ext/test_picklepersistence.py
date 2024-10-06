@@ -245,7 +245,7 @@ def update(bot):
     return Update(0, message=message)
 
 
-class TestPicklePersistence:
+class TestPicklePersistenceWithoutRequest:
     """Just tests the PicklePersistence interface. Integration of persistence into Applictation
     is tested in TestBasePersistence!"""
 

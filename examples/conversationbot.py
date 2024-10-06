@@ -22,6 +22,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    ConversationStates,
     MessageHandler,
     filters,
 )
@@ -59,12 +60,18 @@ async def gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.message.from_user
     logger.info("Gender of %s: %s", user.first_name, update.message.text)
     await update.message.reply_text(
-        "I see! Please send me a photo of yourself, "
-        "so I know what you look like, or send /skip if you don't want to.",
+        "I see!",
         reply_markup=ReplyKeyboardRemove(),
     )
 
     return PHOTO
+
+
+async def photo_state_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Please send me a photo of yourself, "
+        "so I know what you look like, or send /skip if you don't want to.",
+    )
 
 
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -125,6 +132,13 @@ async def bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+async def command_not_supported(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Catches all commands from the user and stays in the current conversation."""
+    user = update.message.from_user
+    logger.info("User %s wanted to use command: %s", user.first_name, update.message.text)
+    await update.message.reply_text("Unfortunately this Command is not supported.")
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancels and ends the conversation."""
     user = update.message.from_user
@@ -143,17 +157,23 @@ def main() -> None:
 
     # Add conversation handler with the states GENDER, PHOTO, LOCATION and BIO
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            GENDER: [MessageHandler(filters.Regex("^(Boy|Girl|Other)$"), gender)],
-            PHOTO: [MessageHandler(filters.PHOTO, photo), CommandHandler("skip", skip_photo)],
-            LOCATION: [
-                MessageHandler(filters.LOCATION, location),
-                CommandHandler("skip", skip_location),
-            ],
-            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, bio)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        conversation_states=ConversationStates(
+            entry_points=[CommandHandler("start", start)],
+            states={
+                GENDER: [MessageHandler(filters.Regex("^(Boy|Girl|Other)$"), gender)],
+                PHOTO: [MessageHandler(filters.PHOTO, photo), CommandHandler("skip", skip_photo)],
+                LOCATION: [
+                    MessageHandler(filters.LOCATION, location),
+                    CommandHandler("skip", skip_location),
+                ],
+                BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, bio)],
+            },
+            state_entry_handlers={
+                PHOTO: [MessageHandler(filters.TEXT, photo_state_entry)],
+            },
+            pre_fallbacks=[CommandHandler("cancel", cancel)],
+            fallbacks=[MessageHandler(filters.COMMAND, command_not_supported)],
+        )
     )
 
     application.add_handler(conv_handler)

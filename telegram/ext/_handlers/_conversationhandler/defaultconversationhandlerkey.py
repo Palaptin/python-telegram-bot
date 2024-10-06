@@ -27,7 +27,7 @@ from telegram.ext._handlers._conversationhandler.conversationhandlerkey import (
 from telegram.ext._handlers.basehandler import BaseHandler
 from telegram.ext._handlers.callbackqueryhandler import CallbackQueryHandler
 from telegram.ext._handlers.choseninlineresulthandler import ChosenInlineResultHandler
-from telegram.ext._utils.types import ConversationKey
+from telegram.ext._utils.types import CCT, ConversationKey
 
 
 class DefaultConversationHandlerKey(ConversationHandlerKey):
@@ -135,7 +135,7 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
 
         return tuple(key)
 
-    def warn_if_handler_is_invalid(self, handler: BaseHandler) -> None:
+    def warn_if_handler_is_invalid(self, handler: BaseHandler[Update, CCT, object]) -> None:
         """
         Checks if the Handler is supported with this ConversationHandlerKey. If not, raise a
         Warning. This method will be called on the  initialization of

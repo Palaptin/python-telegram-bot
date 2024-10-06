@@ -61,7 +61,7 @@ class _ConversationTimeoutContext(Generic[CCT]):
     callback_context: CCT
 
 
-class ConversationHandler(BaseHandler[Update, CCT, object]):
+class ConversationHandler(BaseHandler[object, CCT, object]):
     """
     A handler to hold a conversation with a single or multiple users through Telegram updates by
     managing three collections of other handlers.
@@ -101,7 +101,8 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
     which should be called on entering the corresponding states. These handlers will be called,
     as soon as the state is entered. Here you can also define an entry_state_handler for
     :attr:`TIMEOUT`, an entry_state_handler for :attr:`WAITING` and an entry_state_handler for
-    :attr:`END`.
+    :attr:`END`. The Update received, as well as the context will be the same, as the one from the
+    handler which transferred to this state
 
     The fourth collection, a :obj:`dict` named :attr:`states`, contains the different conversation
     steps and one or more associated handlers that should be used if the user sends a message when
@@ -227,8 +228,8 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
 
     # pylint: disable=super-init-not-called
     def __init__(
-        self,
-        conversation_states: "ConversationStates",
+        self: "ConversationHandler[CCT]",
+        conversation_states: "ConversationStates[CCT]",
         key_builder: Optional[ConversationHandlerKey] = None,
         conversation_timeout: Optional[Union[float, datetime.timedelta]] = None,
         name: Optional[str] = None,
@@ -606,26 +607,9 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
         except ApplicationHandlerStop as exception:
             new_state = exception.state
             raise_dp_handler_stop = True
-
-        if (
-            isinstance(self.available_states.map_to_parent, dict)
-            and new_state in self.available_states.map_to_parent
-        ):
-            await self._update_state(
-                new_state=self.END,
-                conversation_data=current_conversation,
-                update=update,
-                context=context,
-                block=block,
-                application=application,
-            )
-
-            if raise_dp_handler_stop:
-                raise ApplicationHandlerStop(self.available_states.map_to_parent.get(new_state))
-            return self.available_states.map_to_parent.get(new_state)
-
+        result = None
         if current_state != self.WAITING:
-            await self._update_state(
+            result = await self._update_state(
                 new_state=new_state,
                 conversation_data=current_conversation,
                 original_conv_key=conversation_key,
@@ -637,11 +621,16 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
             )
 
         if raise_dp_handler_stop:
+            if (
+                isinstance(self.available_states.map_to_parent, dict)
+                and new_state in self.available_states.map_to_parent
+            ):
+                raise ApplicationHandlerStop(self.available_states.map_to_parent.get(new_state))
             # Don't pass the new state here. If we're in a nested conversation, the parent is
             # expecting None as return value.
             raise ApplicationHandlerStop
         # Signals a possible parent conversation to stay in the current state
-        return None
+        return result
 
     async def _update_state(
         self,
@@ -653,7 +642,8 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
         application: "Application",
         handler: Optional[BaseHandler] = None,
         original_conv_key: Optional[ConversationKey] = None,
-    ) -> None:
+    ) -> Optional[object]:
+
         if isinstance(new_state, asyncio.Task):
             conversation_data.state = PendingState(
                 conversation_data=conversation_data,
@@ -667,7 +657,7 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
                 block=block,
             )
             self._conversations[conversation_data.key] = conversation_data
-            return
+            return None
             # we will come back once the state is resolved
 
         result = await self._execute_state_entry_handlers(
@@ -677,21 +667,23 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
             application=application,
         )
         if result is not None:
-            if new_state != self.END:
-                new_state = result
-            else:
-                warn(
-                    "State END (-1) can not be changed by state_entry_handlers.",
-                    stacklevel=2,
-                )
+            new_state = result
 
-        if new_state == self.END:
+        if (
+            isinstance(self.available_states.map_to_parent, dict)
+            and new_state in self.available_states.map_to_parent
+        ):
             if conversation_data.key in self._conversations:
                 # If there is no key in conversations, nothing is done.
                 del self._conversations[conversation_data.key]
-                return
+            return self.available_states.map_to_parent.get(new_state)
 
-        elif new_state is not None:
+        if new_state == self.END and conversation_data.key in self._conversations:
+            # If there is no key in conversations, nothing is done.
+            del self._conversations[conversation_data.key]
+            return None
+
+        if new_state is not None:
             if new_state not in self.available_states.states:
                 warn(
                     f"{repr(handler.callback.__name__) if handler is not None else 'BaseHandler'} "
@@ -728,6 +720,7 @@ class ConversationHandler(BaseHandler[Update, CCT, object]):
             del self._conversations[conversation_data.key]
 
         self._conversations[conversation_data.key] = conversation_data
+        return None
 
     async def _trigger_timeout(self, context: CCT) -> None:
         """This is run whenever a conversation has timed out. Also makes sure that the first

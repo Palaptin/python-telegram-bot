@@ -38,7 +38,7 @@ from telegram.ext._handlers._conversationhandler.pendingstate import PendingStat
 from tests.auxil.slots import mro_slots
 
 
-class TestConversationHandler:
+class TestPendingStateWithoutRequest:
     async def test_slot_behaviour(self, app: Application) -> None:
         async with app:
             pending_state = PendingState(
