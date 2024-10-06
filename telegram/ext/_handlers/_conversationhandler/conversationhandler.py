@@ -42,7 +42,7 @@ from telegram.ext._utils.types import CCT, COD, ConversationDict, ConversationKe
 if TYPE_CHECKING:
     from telegram.ext import Application, Job, JobQueue
     from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
-_CheckUpdateType = Tuple[object, ConversationKey, BaseHandler[object, CCT], object]
+_CheckUpdateType = Tuple[object, ConversationKey, BaseHandler[object, CCT, object], object]
 
 _LOGGER = get_logger(__name__, class_name="ConversationHandler")
 
@@ -61,7 +61,7 @@ class _ConversationTimeoutContext(Generic[CCT]):
     callback_context: CCT
 
 
-class ConversationHandler(BaseHandler[object, CCT]):
+class ConversationHandler(BaseHandler[Update, CCT, object]):
     """
     A handler to hold a conversation with a single or multiple users through Telegram updates by
     managing three collections of other handlers.

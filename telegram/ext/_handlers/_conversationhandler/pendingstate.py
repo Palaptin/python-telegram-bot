@@ -58,7 +58,7 @@ class PendingState:
         task: asyncio.Task,
         conv_handler: "ConversationHandler",
         conversation_data: ConversationData,
-        handler: Optional["BaseHandler[Any, CCT]"],
+        handler: Optional["BaseHandler[Any, CCT, object]"],
         update: object,
         context: CCT,
         application: "Application",

@@ -63,7 +63,7 @@ class TestChatWithoutRequest(ChatTestBase):
             assert getattr(chat, attr, "err") != "err", f"got extra slot '{attr}'"
         assert len(mro_slots(chat)) == len(set(mro_slots(chat))), "duplicate slot"
 
-    def test_de_json(self, bot):
+    def test_de_json(self, offline_bot):
         json_dict = {
             "id": self.id_,
             "title": self.title,
@@ -73,7 +73,7 @@ class TestChatWithoutRequest(ChatTestBase):
             "first_name": self.first_name,
             "last_name": self.last_name,
         }
-        chat = Chat.de_json(json_dict, bot)
+        chat = Chat.de_json(json_dict, offline_bot)
 
         assert chat.id == self.id_
         assert chat.title == self.title
@@ -1299,6 +1299,7 @@ class TestChatWithoutRequest(ChatTestBase):
                 and kwargs["media"] == "media"
                 and kwargs["star_count"] == 42
                 and kwargs["caption"] == "stars"
+                and kwargs["payload"] == "payload"
             )
 
         assert check_shortcut_signature(Chat.send_paid_media, Bot.send_paid_media, ["chat_id"], [])
@@ -1306,7 +1307,9 @@ class TestChatWithoutRequest(ChatTestBase):
         assert await check_defaults_handling(chat.send_paid_media, chat.get_bot())
 
         monkeypatch.setattr(chat.get_bot(), "send_paid_media", make_assertion)
-        assert await chat.send_paid_media(media="media", star_count=42, caption="stars")
+        assert await chat.send_paid_media(
+            media="media", star_count=42, caption="stars", payload="payload"
+        )
 
     def test_mention_html(self):
         chat = Chat(id=1, type="foo")

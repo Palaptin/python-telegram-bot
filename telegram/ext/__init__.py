@@ -52,6 +52,7 @@ __all__ = (
     "JobQueue",
     "MessageHandler",
     "MessageReactionHandler",
+    "PaidMediaPurchasedHandler",
     "PersistenceInput",
     "PicklePersistence",
     "PollAnswerHandler",
@@ -98,6 +99,7 @@ from ._handlers.commandhandler import CommandHandler
 from ._handlers.inlinequeryhandler import InlineQueryHandler
 from ._handlers.messagehandler import MessageHandler
 from ._handlers.messagereactionhandler import MessageReactionHandler
+from ._handlers.paidmediapurchasedhandler import PaidMediaPurchasedHandler
 from ._handlers.pollanswerhandler import PollAnswerHandler
 from ._handlers.pollhandler import PollHandler
 from ._handlers.precheckoutqueryhandler import PreCheckoutQueryHandler
