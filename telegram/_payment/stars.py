@@ -19,8 +19,9 @@
 # pylint: disable=redefined-builtin
 """This module contains the classes for Telegram Stars transactions."""
 
+from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING, Dict, Final, Optional, Sequence, Tuple, Type
+from typing import TYPE_CHECKING, Final, Optional
 
 from telegram import constants
 from telegram._paidmedia import PaidMedia
@@ -79,7 +80,7 @@ class RevenueWithdrawalState(TelegramObject):
         care of selecting the correct subclass.
 
         Args:
-            data (Dict[:obj:`str`, ...]): The JSON data.
+            data (dict[:obj:`str`, ...]): The JSON data.
             bot (:class:`telegram.Bot`): The bot associated with this object.
 
         Returns:
@@ -91,7 +92,7 @@ class RevenueWithdrawalState(TelegramObject):
         if not data:
             return None
 
-        _class_mapping: Dict[str, Type[RevenueWithdrawalState]] = {
+        _class_mapping: dict[str, type[RevenueWithdrawalState]] = {
             cls.PENDING: RevenueWithdrawalStatePending,
             cls.SUCCEEDED: RevenueWithdrawalStateSucceeded,
             cls.FAILED: RevenueWithdrawalStateFailed,
@@ -217,12 +218,14 @@ class TransactionPartner(TelegramObject):
 
     FRAGMENT: Final[str] = constants.TransactionPartnerType.FRAGMENT
     """:const:`telegram.constants.TransactionPartnerType.FRAGMENT`"""
-    USER: Final[str] = constants.TransactionPartnerType.USER
-    """:const:`telegram.constants.TransactionPartnerType.USER`"""
     OTHER: Final[str] = constants.TransactionPartnerType.OTHER
     """:const:`telegram.constants.TransactionPartnerType.OTHER`"""
     TELEGRAM_ADS: Final[str] = constants.TransactionPartnerType.TELEGRAM_ADS
     """:const:`telegram.constants.TransactionPartnerType.TELEGRAM_ADS`"""
+    TELEGRAM_API: Final[str] = constants.TransactionPartnerType.TELEGRAM_API
+    """:const:`telegram.constants.TransactionPartnerType.TELEGRAM_API`"""
+    USER: Final[str] = constants.TransactionPartnerType.USER
+    """:const:`telegram.constants.TransactionPartnerType.USER`"""
 
     def __init__(self, type: str, *, api_kwargs: Optional[JSONDict] = None) -> None:
         super().__init__(api_kwargs=api_kwargs)
@@ -239,7 +242,7 @@ class TransactionPartner(TelegramObject):
         care of selecting the correct subclass.
 
         Args:
-            data (Dict[:obj:`str`, ...]): The JSON data.
+            data (dict[:obj:`str`, ...]): The JSON data.
             bot (:class:`telegram.Bot`): The bot associated with this object.
 
         Returns:
@@ -254,11 +257,12 @@ class TransactionPartner(TelegramObject):
         if not data and cls is TransactionPartner:
             return None
 
-        _class_mapping: Dict[str, Type[TransactionPartner]] = {
+        _class_mapping: dict[str, type[TransactionPartner]] = {
             cls.FRAGMENT: TransactionPartnerFragment,
             cls.USER: TransactionPartnerUser,
-            cls.OTHER: TransactionPartnerOther,
             cls.TELEGRAM_ADS: TransactionPartnerTelegramAds,
+            cls.TELEGRAM_API: TransactionPartnerTelegramApi,
+            cls.OTHER: TransactionPartnerOther,
         }
 
         if cls is TransactionPartner and data.get("type") in _class_mapping:
@@ -337,7 +341,7 @@ class TransactionPartnerUser(TransactionPartner):
             always :tg-const:`telegram.TransactionPartner.USER`.
         user (:class:`telegram.User`): Information about the user.
         invoice_payload (:obj:`str`): Optional. Bot-specified invoice payload.
-        paid_media (Tuple[:class:`telegram.PaidMedia`]): Optional. Information about the paid
+        paid_media (tuple[:class:`telegram.PaidMedia`]): Optional. Information about the paid
             media bought by the user.
 
             .. versionadded:: 21.5
@@ -363,7 +367,7 @@ class TransactionPartnerUser(TransactionPartner):
         with self._unfrozen():
             self.user: User = user
             self.invoice_payload: Optional[str] = invoice_payload
-            self.paid_media: Optional[Tuple[PaidMedia, ...]] = parse_sequence_arg(paid_media)
+            self.paid_media: Optional[tuple[PaidMedia, ...]] = parse_sequence_arg(paid_media)
             self.paid_media_payload: Optional[str] = paid_media_payload
             self._id_attrs = (
                 self.type,
@@ -418,6 +422,35 @@ class TransactionPartnerTelegramAds(TransactionPartner):
     def __init__(self, *, api_kwargs: Optional[JSONDict] = None) -> None:
         super().__init__(type=TransactionPartner.TELEGRAM_ADS, api_kwargs=api_kwargs)
         self._freeze()
+
+
+class TransactionPartnerTelegramApi(TransactionPartner):
+    """Describes a transaction with payment for
+    `paid broadcasting <https://core.telegram.org/bots/api#paid-broadcasts>`_.
+
+    Objects of this class are comparable in terms of equality. Two objects of this class are
+    considered equal, if their :attr:`request_count` is equal.
+
+    .. versionadded:: 21.7
+
+    Args:
+        request_count (:obj:`int`): The number of successful requests that exceeded regular limits
+            and were therefore billed.
+
+    Attributes:
+        type (:obj:`str`): The type of the transaction partner,
+            always :tg-const:`telegram.TransactionPartner.TELEGRAM_API`.
+        request_count (:obj:`int`): The number of successful requests that exceeded regular limits
+            and were therefore billed.
+    """
+
+    __slots__ = ("request_count",)
+
+    def __init__(self, request_count: int, *, api_kwargs: Optional[JSONDict] = None) -> None:
+        super().__init__(type=TransactionPartner.TELEGRAM_API, api_kwargs=api_kwargs)
+        with self._unfrozen():
+            self.request_count: int = request_count
+            self._id_attrs = (self.request_count,)
 
 
 class StarTransaction(TelegramObject):
@@ -516,7 +549,7 @@ class StarTransactions(TelegramObject):
         transactions (Sequence[:class:`telegram.StarTransaction`]): The list of transactions.
 
     Attributes:
-        transactions (Tuple[:class:`telegram.StarTransaction`]): The list of transactions.
+        transactions (tuple[:class:`telegram.StarTransaction`]): The list of transactions.
     """
 
     __slots__ = ("transactions",)
@@ -525,7 +558,7 @@ class StarTransactions(TelegramObject):
         self, transactions: Sequence[StarTransaction], *, api_kwargs: Optional[JSONDict] = None
     ):
         super().__init__(api_kwargs=api_kwargs)
-        self.transactions: Tuple[StarTransaction, ...] = parse_sequence_arg(transactions)
+        self.transactions: tuple[StarTransaction, ...] = parse_sequence_arg(transactions)
 
         self._id_attrs = (self.transactions,)
         self._freeze()

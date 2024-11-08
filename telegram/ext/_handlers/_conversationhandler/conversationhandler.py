@@ -20,7 +20,7 @@
 import asyncio
 import datetime
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Final, Generic, NoReturn, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Final, Generic, NoReturn, Optional, Union, cast
 
 from telegram import Update
 from telegram._utils.defaultvalue import DEFAULT_TRUE, DefaultValue
@@ -42,7 +42,7 @@ from telegram.ext._utils.types import CCT, COD, ConversationDict, ConversationKe
 if TYPE_CHECKING:
     from telegram.ext import Application, Job, JobQueue
     from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
-_CheckUpdateType = Tuple[object, ConversationKey, BaseHandler[object, CCT, object], object]
+_CheckUpdateType = tuple[object, ConversationKey, BaseHandler[object, CCT, object], object]
 
 _LOGGER = get_logger(__name__, class_name="ConversationHandler")
 
@@ -261,7 +261,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
 
         # if conversation_timeout is used, this dict is used to schedule a job which runs when the
         # conv has timed out.
-        self.timeout_jobs: Dict[ConversationKey, Job[Any]] = {}
+        self.timeout_jobs: dict[ConversationKey, Job[Any]] = {}
         self._timeout_jobs_lock = asyncio.Lock()
         self._conversations: ConversationDict = {}
 
@@ -345,7 +345,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
 
     async def _initialize_persistence(
         self, application: "Application"
-    ) -> Dict[str, TrackingDict[ConversationKey, ConversationData]]:
+    ) -> dict[str, TrackingDict[ConversationKey, ConversationData]]:
         """Initializes the persistence for this handler and its child conversations.
         While this method is marked as protected, we expect it to be called by the
         Application/parent conversations. It's just protected to hide it from users.
@@ -415,7 +415,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
         context: CCT,
         conversation_key: ConversationKey,
         current_conversation: ConversationData,
-        timeout_job_kwargs: Optional[Dict[str, Any]] = None,
+        timeout_job_kwargs: Optional[dict[str, Any]] = None,
     ) -> None:
         """Schedules a job which executes :meth:`_trigger_timeout` upon conversation timeout."""
         if new_state == self.END:

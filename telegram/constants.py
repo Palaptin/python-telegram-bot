@@ -108,7 +108,7 @@ __all__ = [
 import datetime
 import sys
 from enum import Enum
-from typing import Final, List, NamedTuple, Optional, Tuple
+from typing import Final, NamedTuple, Optional
 
 from telegram._utils.datetime import UTC
 from telegram._utils.enum import IntEnum, StringEnum
@@ -141,8 +141,8 @@ class _AccentColor(NamedTuple):
 
     identifier: int
     name: Optional[str] = None
-    light_colors: Tuple[int, ...] = ()
-    dark_colors: Tuple[int, ...] = ()
+    light_colors: tuple[int, ...] = ()
+    dark_colors: tuple[int, ...] = ()
 
 
 #: :class:`typing.NamedTuple`: A tuple containing the two components of the version number:
@@ -152,7 +152,7 @@ class _AccentColor(NamedTuple):
 #: :data:`telegram.__bot_api_version_info__`.
 #:
 #: .. versionadded:: 20.0
-BOT_API_VERSION_INFO: Final[_BotAPIVersion] = _BotAPIVersion(major=7, minor=10)
+BOT_API_VERSION_INFO: Final[_BotAPIVersion] = _BotAPIVersion(major=7, minor=11)
 #: :obj:`str`: Telegram Bot API
 #: version supported by this version of `python-telegram-bot`. Also available as
 #: :data:`telegram.__bot_api_version__`.
@@ -162,9 +162,9 @@ BOT_API_VERSION: Final[str] = str(BOT_API_VERSION_INFO)
 
 # constants above this line are tested
 
-#: List[:obj:`int`]: Ports supported by
+#: list[:obj:`int`]: Ports supported by
 #:  :paramref:`telegram.Bot.set_webhook.url`.
-SUPPORTED_WEBHOOK_PORTS: Final[List[int]] = [443, 80, 88, 8443]
+SUPPORTED_WEBHOOK_PORTS: Final[list[int]] = [443, 80, 88, 8443]
 
 #: :obj:`datetime.datetime`, value of unix 0.
 #: This date literal is used in :class:`telegram.InaccessibleMessage`
@@ -180,9 +180,9 @@ class AccentColor(Enum):
 
     - ``identifier`` (:obj:`int`): The identifier of the accent color.
     - ``name`` (:obj:`str`): Optional. The name of the accent color.
-    - ``light_colors`` (Tuple[:obj:`str`]): Optional. The light colors of the accent color as HEX
+    - ``light_colors`` (tuple[:obj:`str`]): Optional. The light colors of the accent color as HEX
       value.
-    - ``dark_colors`` (Tuple[:obj:`str`]): Optional. The dark colors of the accent color as HEX
+    - ``dark_colors`` (tuple[:obj:`str`]): Optional. The dark colors of the accent color as HEX
       value.
 
     Since Telegram gives no exact specification for the accent colors, future accent colors might
@@ -1154,6 +1154,14 @@ class FloodLimit(IntEnum):
     """:obj:`int`: The number of messages that can roughly be sent to a particular group within one
     minute.
     """
+    PAID_MESSAGES_PER_SECOND = 1000
+    """:obj:`int`: The number of messages that can be sent per second when paying with the bot's
+    Telegram Star balance. See e.g. parameter
+    :paramref:`~telegram.Bot.send_message.allow_paid_broadcast` of
+    :meth:`~telegram.Bot.send_message`.
+
+    .. versionadded:: 21.7
+    """
 
 
 class ForumIconColor(IntEnum):
@@ -1261,14 +1269,22 @@ class InlineKeyboardButtonLimit(IntEnum):
     __slots__ = ()
 
     MIN_CALLBACK_DATA = 1
-    """:obj:`int`: Minimum value allowed for
+    """:obj:`int`: Minimum length allowed for
     :paramref:`~telegram.InlineKeyboardButton.callback_data` parameter of
     :class:`telegram.InlineKeyboardButton`
     """
     MAX_CALLBACK_DATA = 64
-    """:obj:`int`: Maximum value allowed for
+    """:obj:`int`: Maximum length allowed for
     :paramref:`~telegram.InlineKeyboardButton.callback_data` parameter of
     :class:`telegram.InlineKeyboardButton`
+    """
+    MIN_COPY_TEXT = 1
+    """:obj:`int`: Minimum length allowed for
+    :paramref:`~telegram.CopyTextButton.text` parameter of :class:`telegram.CopyTextButton`
+    """
+    MAX_COPY_TEXT = 256
+    """:obj:`int`: Maximum length allowed for
+    :paramref:`~telegram.CopyTextButton.text` parameter of :class:`telegram.CopyTextButton`
     """
 
 
@@ -2083,9 +2099,9 @@ class ProfileAccentColor(Enum):
 
     - ``identifier`` (:obj:`int`): The identifier of the accent color.
     - ``name`` (:obj:`str`): Optional. The name of the accent color.
-    - ``light_colors`` (Tuple[:obj:`str`]): Optional. The light colors of the accent color as HEX
+    - ``light_colors`` (tuple[:obj:`str`]): Optional. The light colors of the accent color as HEX
       value.
-    - ``dark_colors`` (Tuple[:obj:`str`]): Optional. The dark colors of the accent color as HEX
+    - ``dark_colors`` (tuple[:obj:`str`]): Optional. The dark colors of the accent color as HEX
       value.
 
     Since Telegram gives no exact specification for the accent colors, future accent colors might
@@ -2592,12 +2608,18 @@ class TransactionPartnerType(StringEnum):
 
     FRAGMENT = "fragment"
     """:obj:`str`: Withdrawal transaction with Fragment."""
-    USER = "user"
-    """:obj:`str`: Transaction with a user."""
     OTHER = "other"
     """:obj:`str`: Transaction with unknown source or recipient."""
     TELEGRAM_ADS = "telegram_ads"
     """:obj:`str`: Transaction with Telegram Ads."""
+    TELEGRAM_API = "telegram_api"
+    """:obj:`str`: Transaction with with payment for
+    `paid broadcasting <https://core.telegram.org/bots/api#paid-broadcasts>`_.
+
+    ..versionadded:: 21.7
+    """
+    USER = "user"
+    """:obj:`str`: Transaction with a user."""
 
 
 class ParseMode(StringEnum):
