@@ -60,10 +60,9 @@ if TYPE_CHECKING:
     from socket import socket
 
     from telegram import Message
-    from telegram.ext import ConversationHandler, JobQueue
+    from telegram.ext import ConversationData, ConversationHandler, JobQueue
     from telegram.ext._applicationbuilder import InitApplicationBuilder
     from telegram.ext._baseupdateprocessor import BaseUpdateProcessor
-    from telegram.ext._handlers._conversationhandler.conversationdata import ConversationData
     from telegram.ext._jobqueue import Job
 
 DEFAULT_GROUP: int = 0

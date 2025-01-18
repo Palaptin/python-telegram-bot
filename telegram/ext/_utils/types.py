@@ -52,14 +52,9 @@ JobCallback = Callable[[CCT], Coroutine[Any, Any, Any]]
 
     .. versionadded:: 20.0
 """
-
+CONDA = TypeVar("CONDA", bound="ConversationData")
 ConversationKey = tuple[Union[int, str], ...]
-COD = TypeVar("COD", bound="ConversationData")
-"""Type of the conversation data for a conversation.
-
-.. versionadded:: NEXT.VERSION
-"""
-ConversationDict = MutableMapping[ConversationKey, COD]
+ConversationDict = MutableMapping[ConversationKey, CONDA]
 """dict[tuple[:obj:`int` | :obj:`str`, ...], Optional[:obj:`ConversationData`]]:
     Dicts as maintained by the :class:`telegram.ext.ConversationHandler`.
 
@@ -82,6 +77,11 @@ BT = TypeVar("BT", bound="Bot")
 """Type of the bot.
 
 .. versionadded:: 20.0
+"""
+COD = TypeVar("COD")
+"""Type of the conversation data for a conversation.
+
+.. versionadded:: NEXT.VERSION
 """
 UD = TypeVar("UD")
 """Type of the user data for a single user.

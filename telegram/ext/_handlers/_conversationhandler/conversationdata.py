@@ -30,24 +30,25 @@ class ConversationData(Generic[COD]):
 
     .. versionadded:: NEXT.VERSION
     Args:
-        key (:obj:`ConversationKey`): The key of the corresponding conversation.
-        state (:obj:`Object`): The state in which the corresponding conversation is currently.
+        key (:obj:`ConversationKey`): The key of the conversation.
+        state (:obj:`Object`): The state in which the conversation is currently.
         timeout (:obj:`float` | :obj:`datetime.timedelta`, optional): Next timeout of the
             corresponding timeout job.
         update (_obj:`Update`, optional): The :obj:`update`.
-                conversation_context_data :obj:`ConversationData.conversation_data`: An object that
-                can be used to keep any data in. For each update from the same conversation it will
-                be the same
+        conversation_context_data (:obj:`ConversationData.conversation_data`): An object that can
+            be used to keep any data in. For each update from the same conversation it will be the
+            same
 
 
     Attributes:
-        key (:obj:`ConversationKey`): The key of the corresponding conversation.
-        state (:obj:`Object`): The state in which the corresponding conversation is currently.
-        timeout (:obj:`float` | :obj:`datetime.timedelta`): Next timeout of the
-            corresponding timeout job.
+        key (:obj:`ConversationKey`): The key of the conversation.
+        state (:obj:`Object`): The state in which the conversation is currently.
+        timeout (:obj:`float` | :obj:`datetime.timedelta`): Next timeout of the corresponding
+            timeout job.
         update (_obj:`object`): The update for the corresponding timeout job.
         conversation_context_data (:obj:`ConversationData.conversation_data`): An object that can
-        be used to keep any data in. For each update from the same conversation it will be the same
+            be used to keep any data in. For each update from the same conversation it will be the
+            same
 
     """
 

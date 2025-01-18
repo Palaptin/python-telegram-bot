@@ -713,7 +713,11 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
                         current_conversation=conversation_data,
                     )
 
-        if original_conv_key and original_conv_key != conversation_data.key:
+        if (
+            original_conv_key
+            and original_conv_key != conversation_data.key
+            and original_conv_key in self._conversations
+        ):
             del self._conversations[original_conv_key]
 
         self._conversations[conversation_data.key] = conversation_data
