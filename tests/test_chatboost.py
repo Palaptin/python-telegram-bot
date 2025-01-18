@@ -1,5 +1,5 @@
 # python-telegram-bot - a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # by the python-telegram-bot contributors <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 
-import datetime
+import datetime as dtm
 import inspect
 from copy import deepcopy
 
@@ -38,6 +38,7 @@ from telegram import (
 from telegram._utils.datetime import UTC, to_timestamp
 from telegram.constants import ChatBoostSources
 from telegram.request import RequestData
+from tests.auxil.dummy_objects import get_dummy_object_json_dict
 from tests.auxil.slots import mro_slots
 
 
@@ -48,7 +49,7 @@ class ChatBoostDefaults:
     is_unclaimed = False
     chat = Chat(1, "group")
     user = User(1, "user", False)
-    date = to_timestamp(datetime.datetime.utcnow())
+    date = to_timestamp(dtm.datetime.utcnow())
     default_source = ChatBoostSourcePremium(user)
     prize_star_count = 99
 
@@ -148,7 +149,7 @@ def iter_args(
         if param.name in ignored:
             continue
         inst_at, json_at = getattr(instance, param.name), getattr(de_json_inst, param.name)
-        if isinstance(json_at, datetime.datetime):  # Convert datetime to int
+        if isinstance(json_at, dtm.datetime):  # Convert dtm to int
             json_at = to_timestamp(json_at)
         if (
             param.default is not inspect.Parameter.empty and include_optional
@@ -174,8 +175,6 @@ class TestChatBoostSourceTypesWithoutRequest:
 
     def test_de_json_required_args(self, offline_bot, chat_boost_source):
         cls = chat_boost_source.__class__
-        assert cls.de_json({}, offline_bot) is None
-        assert ChatBoost.de_json({}, offline_bot) is None
 
         json_dict = make_json_dict(chat_boost_source)
         const_boost_source = ChatBoostSource.de_json(json_dict, offline_bot)
@@ -275,8 +274,8 @@ class TestChatBoostWithoutRequest(ChatBoostDefaults):
         cb = ChatBoost.de_json(json_dict, offline_bot)
 
         assert isinstance(cb, ChatBoost)
-        assert isinstance(cb.add_date, datetime.datetime)
-        assert isinstance(cb.expiration_date, datetime.datetime)
+        assert isinstance(cb.add_date, dtm.datetime)
+        assert isinstance(cb.expiration_date, dtm.datetime)
         assert isinstance(cb.source, ChatBoostSource)
         with cb._unfrozen():
             cb.add_date = to_timestamp(cb.add_date)
@@ -534,7 +533,7 @@ class TestUserChatBoostsWithoutRequest(ChatBoostDefaults):
             user_id = data["user_id"] == "2"
             if not all((chat_id, user_id)):
                 pytest.fail("I got wrong parameters in post")
-            return data
+            return get_dummy_object_json_dict(UserChatBoosts)
 
         monkeypatch.setattr(offline_bot.request, "post", make_assertion)
 

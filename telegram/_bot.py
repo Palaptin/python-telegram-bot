@@ -2,7 +2,7 @@
 # pylint: disable=too-many-arguments
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -22,9 +22,9 @@
 import asyncio
 import contextlib
 import copy
+import datetime as dtm
 import pickle
 from collections.abc import Sequence
-from datetime import datetime
 from types import TracebackType
 from typing import (
     TYPE_CHECKING,
@@ -75,11 +75,13 @@ from telegram._files.videonote import VideoNote
 from telegram._files.voice import Voice
 from telegram._forumtopic import ForumTopic
 from telegram._games.gamehighscore import GameHighScore
+from telegram._gifts import Gift, Gifts
 from telegram._inline.inlinequeryresultsbutton import InlineQueryResultsButton
+from telegram._inline.preparedinlinemessage import PreparedInlineMessage
 from telegram._menubutton import MenuButton
 from telegram._message import Message
 from telegram._messageid import MessageId
-from telegram._payment.stars import StarTransactions
+from telegram._payment.stars.startransactions import StarTransactions
 from telegram._poll import InputPollOption, Poll
 from telegram._reaction import ReactionType, ReactionTypeCustomEmoji, ReactionTypeEmoji
 from telegram._reply import ReplyParameters
@@ -899,7 +901,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
         self._bot_user = User.de_json(result, self)
-        return self._bot_user  # type: ignore[return-value]
+        return self._bot_user
 
     async def send_message(
         self,
@@ -3641,6 +3643,65 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
+    async def save_prepared_inline_message(
+        self,
+        user_id: int,
+        result: "InlineQueryResult",
+        allow_user_chats: Optional[bool] = None,
+        allow_bot_chats: Optional[bool] = None,
+        allow_group_chats: Optional[bool] = None,
+        allow_channel_chats: Optional[bool] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> PreparedInlineMessage:
+        """Stores a message that can be sent by a user of a Mini App.
+
+        .. versionadded:: 21.8
+
+        Args:
+            user_id (:obj:`int`): Unique identifier of the target user that can use the prepared
+                message.
+            result (:class:`telegram.InlineQueryResult`): The result to store.
+            allow_user_chats (:obj:`bool`, optional): Pass :obj:`True` if the message can be sent
+                to private chats with users
+            allow_bot_chats (:obj:`bool`, optional): Pass :obj:`True` if the message can be sent
+                to private chats with bots
+            allow_group_chats (:obj:`bool`, optional): Pass :obj:`True` if the message can be sent
+                to group and supergroup chats
+            allow_channel_chats (:obj:`bool`, optional): Pass :obj:`True` if the message can be
+                sent to channels
+
+        Returns:
+            :class:`telegram.PreparedInlineMessage`: On success, the prepared message is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+            "result": result,
+            "allow_user_chats": allow_user_chats,
+            "allow_bot_chats": allow_bot_chats,
+            "allow_group_chats": allow_group_chats,
+            "allow_channel_chats": allow_channel_chats,
+        }
+        return PreparedInlineMessage.de_json(
+            await self._post(
+                "savePreparedInlineMessage",
+                data,
+                read_timeout=read_timeout,
+                write_timeout=write_timeout,
+                connect_timeout=connect_timeout,
+                pool_timeout=pool_timeout,
+                api_kwargs=api_kwargs,
+            ),
+            self,
+        )
+
     async def get_user_profile_photos(
         self,
         user_id: int,
@@ -3683,7 +3744,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return UserProfilePhotos.de_json(result, self)  # type: ignore[return-value]
+        return UserProfilePhotos.de_json(result, self)
 
     async def get_file(
         self,
@@ -3748,13 +3809,13 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
         if file_path and not is_local_file(file_path):
             result["file_path"] = f"{self._base_file_url}/{file_path}"
 
-        return File.de_json(result, self)  # type: ignore[return-value]
+        return File.de_json(result, self)
 
     async def ban_chat_member(
         self,
         chat_id: Union[str, int],
         user_id: int,
-        until_date: Optional[Union[int, datetime]] = None,
+        until_date: Optional[Union[int, dtm.datetime]] = None,
         revoke_messages: Optional[bool] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -3779,9 +3840,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
                 be unbanned, unix time. If user is banned for more than 366 days or less than 30
                 seconds from the current time they are considered to be banned forever. Applied
                 for supergroups and channels only.
-                For timezone naive :obj:`datetime.datetime` objects, the default timezone of the
-                bot will be used, which is UTC unless :attr:`telegram.ext.Defaults.tzinfo` is
-                used.
+                |tz-naive-dtms|
             revoke_messages (:obj:`bool`, optional): Pass :obj:`True` to delete all messages from
                 the chat for the user that is being removed. If :obj:`False`, the user will be able
                 to see messages in the group that were sent before the user was removed.
@@ -4327,7 +4386,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
         self,
         offset: Optional[int] = None,
         limit: Optional[int] = None,
-        timeout: Optional[int] = None,  # noqa: ASYNC109
+        timeout: Optional[int] = None,
         allowed_updates: Optional[Sequence[str]] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -4670,7 +4729,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return ChatFullInfo.de_json(result, self)  # type: ignore[return-value]
+        return ChatFullInfo.de_json(result, self)
 
     async def get_chat_administrators(
         self,
@@ -4783,7 +4842,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return ChatMember.de_json(result, self)  # type: ignore[return-value]
+        return ChatMember.de_json(result, self)
 
     async def set_chat_sticker_set(
         self,
@@ -4878,7 +4937,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return WebhookInfo.de_json(result, self)  # type: ignore[return-value]
+        return WebhookInfo.de_json(result, self)
 
     async def set_game_score(
         self,
@@ -5385,14 +5444,14 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return SentWebAppMessage.de_json(api_result, self)  # type: ignore[return-value]
+        return SentWebAppMessage.de_json(api_result, self)
 
     async def restrict_chat_member(
         self,
         chat_id: Union[str, int],
         user_id: int,
         permissions: ChatPermissions,
-        until_date: Optional[Union[int, datetime]] = None,
+        until_date: Optional[Union[int, dtm.datetime]] = None,
         use_independent_chat_permissions: Optional[bool] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -5415,9 +5474,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
                 will be lifted for the user, unix time. If user is restricted for more than 366
                 days or less than 30 seconds from the current time, they are considered to be
                 restricted forever.
-                For timezone naive :obj:`datetime.datetime` objects, the default timezone of the
-                bot will be used, which is UTC unless :attr:`telegram.ext.Defaults.tzinfo` is
-                used.
+                |tz-naive-dtms|
             permissions (:class:`telegram.ChatPermissions`): An object for new user
                 permissions.
             use_independent_chat_permissions (:obj:`bool`, optional): Pass :obj:`True` if chat
@@ -5731,7 +5788,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
     async def create_chat_invite_link(
         self,
         chat_id: Union[str, int],
-        expire_date: Optional[Union[int, datetime]] = None,
+        expire_date: Optional[Union[int, dtm.datetime]] = None,
         member_limit: Optional[int] = None,
         name: Optional[str] = None,
         creates_join_request: Optional[bool] = None,
@@ -5761,9 +5818,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             chat_id (:obj:`int` | :obj:`str`): |chat_id_channel|
             expire_date (:obj:`int` | :obj:`datetime.datetime`, optional): Date when the link will
                 expire. Integer input will be interpreted as Unix timestamp.
-                For timezone naive :obj:`datetime.datetime` objects, the default timezone of the
-                bot will be used, which is UTC unless :attr:`telegram.ext.Defaults.tzinfo` is
-                used.
+                |tz-naive-dtms|
             member_limit (:obj:`int`, optional): Maximum number of users that can be members of
                 the chat simultaneously after joining the chat via this invite link;
                 :tg-const:`telegram.constants.ChatInviteLinkLimit.MIN_MEMBER_LIMIT`-
@@ -5803,13 +5858,13 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return ChatInviteLink.de_json(result, self)  # type: ignore[return-value]
+        return ChatInviteLink.de_json(result, self)
 
     async def edit_chat_invite_link(
         self,
         chat_id: Union[str, int],
         invite_link: Union[str, "ChatInviteLink"],
-        expire_date: Optional[Union[int, datetime]] = None,
+        expire_date: Optional[Union[int, dtm.datetime]] = None,
         member_limit: Optional[int] = None,
         name: Optional[str] = None,
         creates_join_request: Optional[bool] = None,
@@ -5840,9 +5895,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
                     Now also accepts :class:`telegram.ChatInviteLink` instances.
             expire_date (:obj:`int` | :obj:`datetime.datetime`, optional): Date when the link will
                 expire.
-                For timezone naive :obj:`datetime.datetime` objects, the default timezone of the
-                bot will be used, which is UTC unless :attr:`telegram.ext.Defaults.tzinfo` is
-                used.
+                |tz-naive-dtms|
             member_limit (:obj:`int`, optional): Maximum number of users that can be members of
                 the chat simultaneously after joining the chat via this invite link;
                 :tg-const:`telegram.constants.ChatInviteLinkLimit.MIN_MEMBER_LIMIT`-
@@ -5884,7 +5937,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return ChatInviteLink.de_json(result, self)  # type: ignore[return-value]
+        return ChatInviteLink.de_json(result, self)
 
     async def revoke_chat_invite_link(
         self,
@@ -5931,7 +5984,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
-        return ChatInviteLink.de_json(result, self)  # type: ignore[return-value]
+        return ChatInviteLink.de_json(result, self)
 
     async def approve_chat_join_request(
         self,
@@ -6176,6 +6229,56 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             api_kwargs=api_kwargs,
         )
 
+    async def set_user_emoji_status(
+        self,
+        user_id: int,
+        emoji_status_custom_emoji_id: Optional[str] = None,
+        emoji_status_expiration_date: Optional[Union[int, dtm.datetime]] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Changes the emoji status for a given user that previously allowed the bot to manage
+        their emoji status via the Mini App method
+        `requestEmojiStatusAccess <https://core.telegram.org/bots/webapps#initializing-mini-apps>`_
+        .
+
+        .. versionadded:: 21.8
+
+        Args:
+            user_id (:obj:`int`): Unique identifier of the target user
+            emoji_status_custom_emoji_id (:obj:`str`, optional): Custom emoji identifier of the
+                emoji status to set. Pass an empty string to remove the status.
+            emoji_status_expiration_date (Union[:obj:`int`, :obj:`datetime.datetime`], optional):
+                Expiration date of the emoji status, if any, as unix timestamp or
+                :class:`datetime.datetime` object.
+                |tz-naive-dtms|
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+            "emoji_status_custom_emoji_id": emoji_status_custom_emoji_id,
+            "emoji_status_expiration_date": emoji_status_expiration_date,
+        }
+        return await self._post(
+            "setUserEmojiStatus",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
     async def pin_chat_message(
         self,
         chat_id: Union[str, int],
@@ -6353,7 +6456,7 @@ class Bot(TelegramObject, contextlib.AbstractAsyncContextManager["Bot"]):
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return StickerSet.de_json(result, self)  # type: ignore[return-value]
+        return StickerSet.de_json(result, self)
 
     async def get_custom_emoji_stickers(
         self,
@@ -6456,7 +6559,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return File.de_json(result, self)  # type: ignore[return-value]
+        return File.de_json(result, self)
 
     async def add_sticker_to_set(
         self,
@@ -6519,7 +6622,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
     async def set_sticker_position_in_set(
         self,
-        sticker: str,
+        sticker: Union[str, "Sticker"],
         position: int,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -6531,7 +6634,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         """Use this method to move a sticker in a set created by the bot to a specific position.
 
         Args:
-            sticker (:obj:`str`): File identifier of the sticker.
+            sticker (:obj:`str` | :class:`~telegram.Sticker`): File identifier of the sticker or
+                the sticker object.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
             position (:obj:`int`): New sticker position in the set, zero-based.
 
         Returns:
@@ -6541,7 +6648,10 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             :class:`telegram.error.TelegramError`
 
         """
-        data: JSONDict = {"sticker": sticker, "position": position}
+        data: JSONDict = {
+            "sticker": sticker if isinstance(sticker, str) else sticker.file_id,
+            "position": position,
+        }
         return await self._post(
             "setStickerPositionInSet",
             data,
@@ -6646,7 +6756,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
     async def delete_sticker_from_set(
         self,
-        sticker: str,
+        sticker: Union[str, "Sticker"],
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
         write_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -6657,7 +6767,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         """Use this method to delete a sticker from a set created by the bot.
 
         Args:
-            sticker (:obj:`str`): File identifier of the sticker.
+            sticker (:obj:`str` | :class:`telegram.Sticker`): File identifier of the sticker or
+                the sticker object.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
 
         Returns:
             :obj:`bool`: On success, :obj:`True` is returned.
@@ -6666,7 +6780,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             :class:`telegram.error.TelegramError`
 
         """
-        data: JSONDict = {"sticker": sticker}
+        data: JSONDict = {"sticker": sticker if isinstance(sticker, str) else sticker.file_id}
         return await self._post(
             "deleteStickerFromSet",
             data,
@@ -6834,7 +6948,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
     async def set_sticker_emoji_list(
         self,
-        sticker: str,
+        sticker: Union[str, "Sticker"],
         emoji_list: Sequence[str],
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -6850,7 +6964,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         .. versionadded:: 20.2
 
         Args:
-            sticker (:obj:`str`): File identifier of the sticker.
+            sticker (:obj:`str` | :class:`~telegram.Sticker`): File identifier of the sticker or
+                the sticker object.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
             emoji_list (Sequence[:obj:`str`]): A sequence of
                 :tg-const:`telegram.constants.StickerLimit.MIN_STICKER_EMOJI`-
                 :tg-const:`telegram.constants.StickerLimit.MAX_STICKER_EMOJI` emoji associated with
@@ -6862,7 +6980,10 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         Raises:
             :class:`telegram.error.TelegramError`
         """
-        data: JSONDict = {"sticker": sticker, "emoji_list": emoji_list}
+        data: JSONDict = {
+            "sticker": sticker if isinstance(sticker, str) else sticker.file_id,
+            "emoji_list": emoji_list,
+        }
         return await self._post(
             "setStickerEmojiList",
             data,
@@ -6875,7 +6996,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
     async def set_sticker_keywords(
         self,
-        sticker: str,
+        sticker: Union[str, "Sticker"],
         keywords: Optional[Sequence[str]] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -6891,7 +7012,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         .. versionadded:: 20.2
 
         Args:
-            sticker (:obj:`str`): File identifier of the sticker.
+            sticker (:obj:`str` | :class:`~telegram.Sticker`): File identifier of the sticker or
+                the sticker object.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
             keywords (Sequence[:obj:`str`]): A sequence of
                 0-:tg-const:`telegram.constants.StickerLimit.MAX_SEARCH_KEYWORDS` search keywords
                 for the sticker with total length up to
@@ -6903,7 +7028,10 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         Raises:
             :class:`telegram.error.TelegramError`
         """
-        data: JSONDict = {"sticker": sticker, "keywords": keywords}
+        data: JSONDict = {
+            "sticker": sticker if isinstance(sticker, str) else sticker.file_id,
+            "keywords": keywords,
+        }
         return await self._post(
             "setStickerKeywords",
             data,
@@ -6916,7 +7044,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
     async def set_sticker_mask_position(
         self,
-        sticker: str,
+        sticker: Union[str, "Sticker"],
         mask_position: Optional[MaskPosition] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -6932,7 +7060,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         .. versionadded:: 20.2
 
         Args:
-            sticker (:obj:`str`): File identifier of the sticker.
+            sticker (:obj:`str` | :class:`~telegram.Sticker`): File identifier of the sticker or
+                the sticker object.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
             mask_position (:class:`telegram.MaskPosition`, optional): A object with the position
                 where the mask should be placed on faces. Omit the parameter to remove the mask
                 position.
@@ -6943,7 +7075,10 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         Raises:
             :class:`telegram.error.TelegramError`
         """
-        data: JSONDict = {"sticker": sticker, "mask_position": mask_position}
+        data: JSONDict = {
+            "sticker": sticker if isinstance(sticker, str) else sticker.file_id,
+            "mask_position": mask_position,
+        }
         return await self._post(
             "setStickerMaskPosition",
             data,
@@ -7056,7 +7191,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         explanation: Optional[str] = None,
         explanation_parse_mode: ODVInput[str] = DEFAULT_NONE,
         open_period: Optional[int] = None,
-        close_date: Optional[Union[int, datetime]] = None,
+        close_date: Optional[Union[int, dtm.datetime]] = None,
         explanation_entities: Optional[Sequence["MessageEntity"]] = None,
         protect_content: ODVInput[bool] = DEFAULT_NONE,
         message_thread_id: Optional[int] = None,
@@ -7127,9 +7262,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
                 :tg-const:`telegram.Poll.MIN_OPEN_PERIOD` and no more than
                 :tg-const:`telegram.Poll.MAX_OPEN_PERIOD` seconds in the future.
                 Can't be used together with :paramref:`open_period`.
-                For timezone naive :obj:`datetime.datetime` objects, the default timezone of the
-                bot will be used, which is UTC unless :attr:`telegram.ext.Defaults.tzinfo` is
-                used.
+                |tz-naive-dtms|
             is_closed (:obj:`bool`, optional): Pass :obj:`True`, if the poll needs to be
                 immediately closed. This can be useful for poll preview.
             disable_notification (:obj:`bool`, optional): |disable_notification|
@@ -7283,7 +7416,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return Poll.de_json(result, self)  # type: ignore[return-value]
+        return Poll.de_json(result, self)
 
     async def send_dice(
         self,
@@ -7439,7 +7572,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             api_kwargs=api_kwargs,
         )
 
-        return ChatAdministratorRights.de_json(result, self)  # type: ignore[return-value]
+        return ChatAdministratorRights.de_json(result, self)
 
     async def set_my_default_administrator_rights(
         self,
@@ -7849,7 +7982,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return MessageId.de_json(result, self)  # type: ignore[return-value]
+        return MessageId.de_json(result, self)
 
     async def copy_messages(
         self,
@@ -8000,7 +8133,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return MenuButton.de_json(result, bot=self)  # type: ignore[return-value]
+        return MenuButton.de_json(result, bot=self)
 
     async def create_invoice_link(
         self,
@@ -8024,6 +8157,8 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         send_phone_number_to_provider: Optional[bool] = None,
         send_email_to_provider: Optional[bool] = None,
         is_flexible: Optional[bool] = None,
+        subscription_period: Optional[Union[int, dtm.timedelta]] = None,
+        business_connection_id: Optional[str] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
         write_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -8036,6 +8171,10 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         .. versionadded:: 20.0
 
         Args:
+            business_connection_id (:obj:`str`, optional): |business_id_str|
+                For payments in |tg_stars| only.
+
+                .. versionadded:: 21.8
             title (:obj:`str`): Product name. :tg-const:`telegram.Invoice.MIN_TITLE_LENGTH`-
                 :tg-const:`telegram.Invoice.MAX_TITLE_LENGTH` characters.
             description (:obj:`str`): Product description.
@@ -8062,6 +8201,18 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
                 .. versionchanged:: 20.0
                     |sequenceargs|
+            subscription_period (:obj:`int` | :class:`datetime.timedelta`, optional): The time the
+                subscription will be active for before the next payment, either as number of
+                seconds or as :class:`datetime.timedelta` object. The currency must be set to
+                ``“XTR”`` (Telegram Stars) if the parameter is used. Currently, it must always be
+                :tg-const:`telegram.constants.InvoiceLimit.SUBSCRIPTION_PERIOD` if specified. Any
+                number of subscriptions can be active for a given bot at the same time, including
+                multiple concurrent subscriptions from the same user. Subscription price must
+                not exceed
+                :tg-const:`telegram.constants.InvoiceLimit.SUBSCRIPTION_MAX_PRICE`
+                Telegram Stars.
+
+                .. versionadded:: 21.8
             max_tip_amount (:obj:`int`, optional): The maximum accepted amount for tips in the
                 *smallest units* of the currency (integer, **not** float/double). For example, for
                 a maximum tip of ``US$ 1.45`` pass ``max_tip_amount = 145``. See the ``exp``
@@ -8127,6 +8278,12 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             "is_flexible": is_flexible,
             "send_phone_number_to_provider": send_phone_number_to_provider,
             "send_email_to_provider": send_email_to_provider,
+            "subscription_period": (
+                subscription_period.total_seconds()
+                if isinstance(subscription_period, dtm.timedelta)
+                else subscription_period
+            ),
+            "business_connection_id": business_connection_id,
         }
 
         return await self._post(
@@ -8227,7 +8384,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             pool_timeout=pool_timeout,
             api_kwargs=api_kwargs,
         )
-        return ForumTopic.de_json(result, self)  # type: ignore[return-value]
+        return ForumTopic.de_json(result, self)
 
     async def edit_forum_topic(
         self,
@@ -8815,7 +8972,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
         """
         data = {"language_code": language_code}
-        return BotDescription.de_json(  # type: ignore[return-value]
+        return BotDescription.de_json(
             await self._post(
                 "getMyDescription",
                 data,
@@ -8854,7 +9011,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
         """
         data = {"language_code": language_code}
-        return BotShortDescription.de_json(  # type: ignore[return-value]
+        return BotShortDescription.de_json(
             await self._post(
                 "getMyShortDescription",
                 data,
@@ -8940,7 +9097,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
         """
         data = {"language_code": language_code}
-        return BotName.de_json(  # type: ignore[return-value]
+        return BotName.de_json(
             await self._post(
                 "getMyName",
                 data,
@@ -8982,7 +9139,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             :class:`telegram.error.TelegramError`
         """
         data: JSONDict = {"chat_id": chat_id, "user_id": user_id}
-        return UserChatBoosts.de_json(  # type: ignore[return-value]
+        return UserChatBoosts.de_json(
             await self._post(
                 "getUserChatBoosts",
                 data,
@@ -9106,7 +9263,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             :class:`telegram.error.TelegramError`
         """
         data: JSONDict = {"business_connection_id": business_connection_id}
-        return BusinessConnection.de_json(  # type: ignore[return-value]
+        return BusinessConnection.de_json(
             await self._post(
                 "getBusinessConnection",
                 data,
@@ -9123,7 +9280,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         self,
         user_id: int,
         name: str,
-        old_sticker: str,
+        old_sticker: Union[str, "Sticker"],
         sticker: "InputSticker",
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -9141,7 +9298,11 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         Args:
             user_id (:obj:`int`): User identifier of the sticker set owner.
             name (:obj:`str`): Sticker set name.
-            old_sticker (:obj:`str`): File identifier of the replaced sticker.
+            old_sticker (:obj:`str` | :class:`~telegram.Sticker`): File identifier of the replaced
+                sticker or the sticker object itself.
+
+                .. versionchanged:: 21.10
+                   Accepts also :class:`telegram.Sticker` instances.
             sticker (:class:`telegram.InputSticker`): An object with information about the added
                 sticker. If exactly the same sticker had already been added to the set, then the
                 set remains unchanged.
@@ -9155,7 +9316,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
         data: JSONDict = {
             "user_id": user_id,
             "name": name,
-            "old_sticker": old_sticker,
+            "old_sticker": old_sticker if isinstance(old_sticker, str) else old_sticker.file_id,
             "sticker": sticker,
         }
 
@@ -9241,7 +9402,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
 
         data: JSONDict = {"offset": offset, "limit": limit}
 
-        return StarTransactions.de_json(  # type: ignore[return-value]
+        return StarTransactions.de_json(
             await self._post(
                 "getStarTransactions",
                 data,
@@ -9252,6 +9413,53 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
                 api_kwargs=api_kwargs,
             ),
             bot=self,
+        )
+
+    async def edit_user_star_subscription(
+        self,
+        user_id: int,
+        telegram_payment_charge_id: str,
+        is_canceled: bool,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Allows the bot to cancel or re-enable extension of a subscription paid in Telegram
+        Stars.
+
+        .. versionadded:: 21.8
+
+        Args:
+            user_id (:obj:`int`): Identifier of the user whose subscription will be edited.
+            telegram_payment_charge_id (:obj:`str`): Telegram payment identifier for the
+                subscription.
+            is_canceled (:obj:`bool`): Pass :obj:`True` to cancel extension of the user
+                subscription; the subscription must be active up to the end of the current
+                subscription period. Pass :obj:`False` to allow the user to re-enable a
+                subscription that was previously canceled by the bot.
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+            "telegram_payment_charge_id": telegram_payment_charge_id,
+            "is_canceled": is_canceled,
+        }
+        return await self._post(
+            "editUserStartSubscription",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
         )
 
     async def send_paid_media(
@@ -9420,7 +9628,7 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             api_kwargs=api_kwargs,
         )
 
-        return ChatInviteLink.de_json(result, self)  # type: ignore[return-value]
+        return ChatInviteLink.de_json(result, self)
 
     async def edit_chat_subscription_invite_link(
         self,
@@ -9473,7 +9681,268 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
             api_kwargs=api_kwargs,
         )
 
-        return ChatInviteLink.de_json(result, self)  # type: ignore[return-value]
+        return ChatInviteLink.de_json(result, self)
+
+    async def get_available_gifts(
+        self,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> Gifts:
+        """Returns the list of gifts that can be sent by the bot to users.
+        Requires no parameters.
+
+        .. versionadded:: 21.8
+
+        Returns:
+            :class:`telegram.Gifts`
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        return Gifts.de_json(
+            await self._post(
+                "getAvailableGifts",
+                read_timeout=read_timeout,
+                write_timeout=write_timeout,
+                connect_timeout=connect_timeout,
+                pool_timeout=pool_timeout,
+                api_kwargs=api_kwargs,
+            )
+        )
+
+    async def send_gift(
+        self,
+        user_id: int,
+        gift_id: Union[str, Gift],
+        text: Optional[str] = None,
+        text_parse_mode: ODVInput[str] = DEFAULT_NONE,
+        text_entities: Optional[Sequence["MessageEntity"]] = None,
+        pay_for_upgrade: Optional[bool] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Sends a gift to the given user.
+        The gift can't be converted to Telegram Stars by the user
+
+        .. versionadded:: 21.8
+
+        Args:
+            user_id (:obj:`int`): Unique identifier of the target user that will receive the gift
+            gift_id (:obj:`str` | :class:`~telegram.Gift`): Identifier of the gift or a
+                :class:`~telegram.Gift` object
+            text (:obj:`str`, optional): Text that will be shown along with the gift;
+                0- :tg-const:`telegram.constants.GiftLimit.MAX_TEXT_LENGTH` characters
+            text_parse_mode (:obj:`str`, optional): Mode for parsing entities.
+                See :class:`telegram.constants.ParseMode` and
+                `formatting options <https://core.telegram.org/bots/api#formatting-options>`__ for
+                more details. Entities other than :attr:`~MessageEntity.BOLD`,
+                :attr:`~MessageEntity.ITALIC`, :attr:`~MessageEntity.UNDERLINE`,
+                :attr:`~MessageEntity.STRIKETHROUGH`, :attr:`~MessageEntity.SPOILER`, and
+                :attr:`~MessageEntity.CUSTOM_EMOJI` are ignored.
+            text_entities (Sequence[:class:`telegram.MessageEntity`], optional): A list of special
+                entities that appear in the gift text. It can be specified instead of
+                :paramref:`text_parse_mode`. Entities other than :attr:`~MessageEntity.BOLD`,
+                :attr:`~MessageEntity.ITALIC`, :attr:`~MessageEntity.UNDERLINE`,
+                :attr:`~MessageEntity.STRIKETHROUGH`, :attr:`~MessageEntity.SPOILER`, and
+                :attr:`~MessageEntity.CUSTOM_EMOJI` are ignored.
+            pay_for_upgrade (:obj:`bool`, optional): Pass :obj:`True` to pay for the gift upgrade
+                from the bot's balance, thereby making the upgrade free for the receiver.
+
+                .. versionadded:: 21.10
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+            "gift_id": gift_id.id if isinstance(gift_id, Gift) else gift_id,
+            "text": text,
+            "text_parse_mode": text_parse_mode,
+            "text_entities": text_entities,
+            "pay_for_upgrade": pay_for_upgrade,
+        }
+        return await self._post(
+            "sendGift",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def verify_chat(
+        self,
+        chat_id: Union[int, str],
+        custom_description: Optional[str] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Verifies a chat on behalf of the organization which is represented by the bot.
+
+        .. versionadded:: 21.10
+
+        Args:
+            chat_id (:obj:`int` | :obj:`str`): |chat_id_channel|
+            custom_description (:obj:`str`, optional): Custom description for the verification;
+                0- :tg-const:`telegram.constants.VerifyLimit.MAX_TEXT_LENGTH` characters. Must be
+                empty if the organization isn't allowed to provide a custom verification
+                description.
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "chat_id": chat_id,
+            "custom_description": custom_description,
+        }
+        return await self._post(
+            "verifyChat",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def verify_user(
+        self,
+        user_id: int,
+        custom_description: Optional[str] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Verifies a user on behalf of the organization which is represented by the bot.
+
+        .. versionadded:: 21.10
+
+        Args:
+            user_id (:obj:`int`): Unique identifier of the target user.
+            custom_description (:obj:`str`, optional): Custom description for the verification;
+                0- :tg-const:`telegram.constants.VerifyLimit.MAX_TEXT_LENGTH` characters. Must be
+                empty if the organization isn't allowed to provide a custom verification
+                description.
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+            "custom_description": custom_description,
+        }
+        return await self._post(
+            "verifyUser",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def remove_chat_verification(
+        self,
+        chat_id: Union[int, str],
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Removes verification from a chat that is currently verified on behalf of the
+        organization represented by the bot.
+
+
+
+        .. versionadded:: 21.10
+
+        Args:
+            chat_id (:obj:`int` | :obj:`str`): |chat_id_channel|
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "chat_id": chat_id,
+        }
+        return await self._post(
+            "removeChatVerification",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def remove_user_verification(
+        self,
+        user_id: int,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Removes verification from a user who is currently verified on behalf of the
+        organization represented by the bot.
+
+
+
+        .. versionadded:: 21.10
+
+        Args:
+            user_id (:obj:`int`): Unique identifier of the target user.
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+
+        Raises:
+            :class:`telegram.error.TelegramError`
+        """
+        data: JSONDict = {
+            "user_id": user_id,
+        }
+        return await self._post(
+            "removeUserVerification",
+            data,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
 
     def to_dict(self, recursive: bool = True) -> JSONDict:  # noqa: ARG002
         """See :meth:`telegram.TelegramObject.to_dict`."""
@@ -9531,6 +10000,8 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
     """Alias for :meth:`send_chat_action`"""
     answerInlineQuery = answer_inline_query
     """Alias for :meth:`answer_inline_query`"""
+    savePreparedInlineMessage = save_prepared_inline_message
+    """Alias for :meth:`save_prepared_inline_message`"""
     getUserProfilePhotos = get_user_profile_photos
     """Alias for :meth:`get_user_profile_photos`"""
     getFile = get_file
@@ -9615,6 +10086,8 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
     """Alias for :meth:`set_chat_title`"""
     setChatDescription = set_chat_description
     """Alias for :meth:`set_chat_description`"""
+    setUserEmojiStatus = set_user_emoji_status
+    """Alias for :meth:`set_user_emoji_status`"""
     pinChatMessage = pin_chat_message
     """Alias for :meth:`pin_chat_message`"""
     unpinChatMessage = unpin_chat_message
@@ -9729,9 +10202,23 @@ CUSTOM_EMOJI_IDENTIFIER_LIMIT` custom emoji identifiers can be specified.
     """Alias for :meth:`refund_star_payment`"""
     getStarTransactions = get_star_transactions
     """Alias for :meth:`get_star_transactions`"""
+    editUserStarSubscription = edit_user_star_subscription
+    """Alias for :meth:`edit_user_star_subscription`"""
     sendPaidMedia = send_paid_media
     """Alias for :meth:`send_paid_media`"""
     createChatSubscriptionInviteLink = create_chat_subscription_invite_link
     """Alias for :meth:`create_chat_subscription_invite_link`"""
     editChatSubscriptionInviteLink = edit_chat_subscription_invite_link
     """Alias for :meth:`edit_chat_subscription_invite_link`"""
+    getAvailableGifts = get_available_gifts
+    """Alias for :meth:`get_available_gifts`"""
+    sendGift = send_gift
+    """Alias for :meth:`send_gift`"""
+    verifyChat = verify_chat
+    """Alias for :meth:`verify_chat`"""
+    verifyUser = verify_user
+    """Alias for :meth:`verify_user`"""
+    removeChatVerification = remove_chat_verification
+    """Alias for :meth:`remove_chat_verification`"""
+    removeUserVerification = remove_user_verification
+    """Alias for :meth:`remove_user_verification`"""

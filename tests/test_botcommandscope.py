@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -128,8 +128,6 @@ class TestBotCommandScopeWithoutRequest:
     def test_de_json(self, offline_bot, scope_class_and_type, chat_id):
         cls = scope_class_and_type[0]
         type_ = scope_class_and_type[1]
-
-        assert cls.de_json({}, offline_bot) is None
 
         json_dict = {"type": type_, "chat_id": chat_id, "user_id": 42}
         bot_command_scope = BotCommandScope.de_json(json_dict, offline_bot)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -158,9 +158,6 @@ class TestInlineKeyboardButtonWithoutRequest(InlineKeyboardButtonTestBase):
             == self.switch_inline_query_chosen_chat
         )
         assert inline_keyboard_button.copy_text == self.copy_text
-
-        none = InlineKeyboardButton.de_json({}, offline_bot)
-        assert none is None
 
     def test_equality(self):
         a = InlineKeyboardButton("text", callback_data="data")

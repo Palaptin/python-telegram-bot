@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ from telegram import (
     Chat,
     ChatAdministratorRights,
     ChatFullInfo,
+    ChatInviteLink,
     ChatPermissions,
     Dice,
     InlineKeyboardButton,
@@ -67,6 +68,7 @@ from telegram import (
     MessageEntity,
     Poll,
     PollOption,
+    PreparedInlineMessage,
     ReactionTypeCustomEmoji,
     ReactionTypeEmoji,
     ReplyParameters,
@@ -78,7 +80,7 @@ from telegram import (
     User,
     WebAppInfo,
 )
-from telegram._utils.datetime import UTC, from_timestamp, to_timestamp
+from telegram._utils.datetime import UTC, from_timestamp, localize, to_timestamp
 from telegram._utils.defaultvalue import DEFAULT_NONE
 from telegram._utils.strings import to_camel_case
 from telegram.constants import (
@@ -96,13 +98,14 @@ from telegram.request import BaseRequest, HTTPXRequest, RequestData
 from telegram.warnings import PTBDeprecationWarning, PTBUserWarning
 from tests.auxil.bot_method_checks import check_defaults_handling
 from tests.auxil.ci_bots import FALLBACKS
-from tests.auxil.envvars import GITHUB_ACTION, TEST_WITH_OPT_DEPS
+from tests.auxil.envvars import GITHUB_ACTIONS
 from tests.auxil.files import data_file
 from tests.auxil.networking import OfflineRequest, expect_bad_request
 from tests.auxil.pytest_classes import PytestBot, PytestExtBot, make_bot
 from tests.auxil.slots import mro_slots
 
 from .auxil.build_messages import make_message
+from .auxil.dummy_objects import get_dummy_object
 
 
 @pytest.fixture
@@ -153,7 +156,7 @@ def inline_results():
 BASE_GAME_SCORE = 60  # Base game score for game tests
 
 xfail = pytest.mark.xfail(
-    bool(GITHUB_ACTION),  # This condition is only relevant for github actions game tests.
+    GITHUB_ACTIONS,  # This condition is only relevant for github actions game tests.
     reason=(
         "Can fail due to race conditions when multiple test suites "
         "with the same bot token are run at the same time"
@@ -190,7 +193,7 @@ def bot_methods(ext_bot=True, include_camel_case=False, include_do_api_request=F
             ids.append(f"{cls.__name__}.{name}")
 
     return pytest.mark.parametrize(
-        argnames="bot_class, bot_method_name,bot_method", argvalues=arg_values, ids=ids
+        argnames=("bot_class", "bot_method_name", "bot_method"), argvalues=arg_values, ids=ids
     )
 
 
@@ -486,17 +489,11 @@ class TestBotWithoutRequest:
         Finally, there are some tests for Defaults.{parse_mode, quote, allow_sending_without_reply}
         at the appropriate places, as those are the only things we can actually check.
         """
-        # Mocking get_me within check_defaults_handling messes with the cached values like
-        # Bot.{bot, username, id, …}` unless we return the expected User object.
-        return_value = (
-            offline_bot.bot if bot_method_name.lower().replace("_", "") == "getme" else None
-        )
-
         # Check that ExtBot does the right thing
         bot_method = getattr(offline_bot, bot_method_name)
         raw_bot_method = getattr(raw_bot, bot_method_name)
-        assert await check_defaults_handling(bot_method, offline_bot, return_value=return_value)
-        assert await check_defaults_handling(raw_bot_method, raw_bot, return_value=return_value)
+        assert await check_defaults_handling(bot_method, offline_bot)
+        assert await check_defaults_handling(raw_bot_method, raw_bot)
 
     @pytest.mark.parametrize(
         ("name", "method"), inspect.getmembers(Bot, predicate=inspect.isfunction)
@@ -1431,7 +1428,9 @@ class TestBotWithoutRequest:
         )
 
     @pytest.mark.parametrize("local_mode", [True, False])
-    async def test_set_chat_photo_local_files(self, monkeypatch, offline_bot, chat_id, local_mode):
+    async def test_set_chat_photo_local_files(
+        self, dummy_message_dict, monkeypatch, offline_bot, chat_id, local_mode
+    ):
         try:
             offline_bot._local_mode = local_mode
             # For just test that the correct paths are passed as we have no local Bot API set up
@@ -1627,7 +1626,7 @@ class TestBotWithoutRequest:
         message = Message(
             1,
             dtm.datetime.utcnow(),
-            None,
+            get_dummy_object(Chat),
             reply_markup=offline_bot.callback_data_cache.process_keyboard(reply_markup),
         )
         message._unfreeze()
@@ -1641,7 +1640,7 @@ class TestBotWithoutRequest:
                     message_type: Message(
                         1,
                         dtm.datetime.utcnow(),
-                        None,
+                        get_dummy_object(Chat),
                         pinned_message=message,
                         reply_to_message=Message.de_json(message.to_dict(), offline_bot),
                     )
@@ -1784,7 +1783,7 @@ class TestBotWithoutRequest:
         message = Message(
             1,
             dtm.datetime.utcnow(),
-            None,
+            get_dummy_object(Chat),
             reply_markup=reply_markup,
             via_bot=bot.bot if self_sender else User(1, "first", False),
         )
@@ -2227,14 +2226,32 @@ class TestBotWithoutRequest:
             api_kwargs={"chat_id": 2, "user_id": 32, "until_date": until_timestamp},
         )
 
-    async def test_business_connection_id_argument(self, offline_bot, monkeypatch):
+    async def test_business_connection_id_argument(
+        self, offline_bot, monkeypatch, dummy_message_dict
+    ):
         """We can't connect to a business acc, so we just test that the correct data is passed.
         We also can't test every single method easily, so we just test a few. Our linting will
         catch any unused args with the others."""
+        return_values = asyncio.Queue()
+        await return_values.put(dummy_message_dict)
+        await return_values.put(
+            Poll(
+                id="42",
+                question="question",
+                options=[PollOption("option", 0)],
+                total_voter_count=5,
+                is_closed=True,
+                is_anonymous=True,
+                type="regular",
+                allows_multiple_answers=False,
+            ).to_dict()
+        )
+        await return_values.put(True)
+        await return_values.put(True)
 
         async def make_assertion(url, request_data: RequestData, *args, **kwargs):
             assert request_data.parameters.get("business_connection_id") == 42
-            return {}
+            return await return_values.get()
 
         monkeypatch.setattr(offline_bot.request, "post", make_assertion)
 
@@ -2321,6 +2338,22 @@ class TestBotWithoutRequest:
         obj = await offline_bot.get_star_transactions(offset=3)
         assert isinstance(obj, StarTransactions)
 
+    async def test_edit_user_star_subscription(self, offline_bot, monkeypatch):
+        """Can't properly test, so we only check that the correct values are passed"""
+
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            return (
+                request_data.parameters.get("user_id") == 42
+                and request_data.parameters.get("telegram_payment_charge_id")
+                == "telegram_payment_charge_id"
+                and request_data.parameters.get("is_canceled") is False
+            )
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+        assert await offline_bot.edit_user_star_subscription(
+            42, "telegram_payment_charge_id", False
+        )
+
     async def test_create_chat_subscription_invite_link(
         self,
         monkeypatch,
@@ -2331,10 +2364,88 @@ class TestBotWithoutRequest:
         async def make_assertion(url, request_data: RequestData, *args, **kwargs):
             assert request_data.parameters.get("subscription_period") == 2592000
             assert request_data.parameters.get("subscription_price") == 6
+            return ChatInviteLink(
+                "https://t.me/joinchat/invite_link", User(1, "first", False), False, False, False
+            ).to_dict()
 
         monkeypatch.setattr(offline_bot.request, "post", make_assertion)
 
         await offline_bot.create_chat_subscription_invite_link(1234, 2592000, 6)
+
+    @pytest.mark.parametrize(
+        "expiration_date", [dtm.datetime(2024, 1, 1), 1704067200], ids=["datetime", "timestamp"]
+    )
+    async def test_set_user_emoji_status_basic(self, offline_bot, monkeypatch, expiration_date):
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("user_id") == 4242
+            assert (
+                request_data.parameters.get("emoji_status_custom_emoji_id")
+                == "emoji_status_custom_emoji_id"
+            )
+            assert request_data.parameters.get("emoji_status_expiration_date") == 1704067200
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+        await offline_bot.set_user_emoji_status(
+            4242, "emoji_status_custom_emoji_id", expiration_date
+        )
+
+    async def test_set_user_emoji_status_default_timezone(self, tz_bot, monkeypatch):
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("user_id") == 4242
+            assert (
+                request_data.parameters.get("emoji_status_custom_emoji_id")
+                == "emoji_status_custom_emoji_id"
+            )
+            assert request_data.parameters.get("emoji_status_expiration_date") == to_timestamp(
+                dtm.datetime(2024, 1, 1), tzinfo=tz_bot.defaults.tzinfo
+            )
+
+        monkeypatch.setattr(tz_bot.request, "post", make_assertion)
+        await tz_bot.set_user_emoji_status(
+            4242, "emoji_status_custom_emoji_id", dtm.datetime(2024, 1, 1)
+        )
+
+    async def test_verify_user(self, offline_bot, monkeypatch):
+        "No way to test this without getting verified"
+
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("user_id") == 1234
+            assert request_data.parameters.get("custom_description") == "this is so custom"
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+
+        await offline_bot.verify_user(1234, "this is so custom")
+
+    async def test_verify_chat(self, offline_bot, monkeypatch):
+        "No way to test this without getting verified"
+
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("chat_id") == 1234
+            assert request_data.parameters.get("custom_description") == "this is so custom"
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+
+        await offline_bot.verify_chat(1234, "this is so custom")
+
+    async def test_unverify_user(self, offline_bot, monkeypatch):
+        "No way to test this without getting verified"
+
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("user_id") == 1234
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+
+        await offline_bot.remove_user_verification(1234)
+
+    async def test_unverify_chat(self, offline_bot, monkeypatch):
+        "No way to test this without getting verified"
+
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            assert request_data.parameters.get("chat_id") == 1234
+
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
+
+        await offline_bot.remove_chat_verification(1234)
 
 
 class TestBotWithRequest:
@@ -2344,6 +2455,9 @@ class TestBotWithRequest:
     Behavior for init of ExtBot with missing optional dependency cachetools (for CallbackDataCache)
     is tested in `test_callbackdatacache`
     """
+
+    # get_available_gifts, send_gift are tested in `test_gift`.
+    # No need to duplicate here.
 
     async def test_invalid_token_server_response(self):
         with pytest.raises(InvalidToken, match="The token `12` was rejected by the server."):
@@ -2840,6 +2954,15 @@ class TestBotWithRequest:
             await bot.answer_inline_query(
                 1234, results=inline_results, next_offset=42, current_offset=51
             )
+
+    async def test_save_prepared_inline_message(self, bot, chat_id):
+        # We can't really check that the result is stored correctly, we just ensur ethat we get
+        # a proper return value
+        result = InlineQueryResultArticle(
+            id="some_id", title="title", input_message_content=InputTextMessageContent("text")
+        )
+        out = await bot.save_prepared_inline_message(chat_id, result, True, False, True, False)
+        assert isinstance(out, PreparedInlineMessage)
 
     async def test_get_user_profile_photos(self, bot, chat_id):
         user_profile_photos = await bot.get_user_profile_photos(chat_id)
@@ -3405,7 +3528,6 @@ class TestBotWithRequest:
         )
         assert revoked_link.is_revoked
 
-    @pytest.mark.skipif(not TEST_WITH_OPT_DEPS, reason="This test's implementation requires pytz")
     @pytest.mark.parametrize("datetime", argvalues=[True, False], ids=["datetime", "integer"])
     async def test_advanced_chat_invite_links(self, bot, channel_id, datetime):
         # we are testing this all in one function in order to save api calls
@@ -3413,7 +3535,7 @@ class TestBotWithRequest:
         add_seconds = dtm.timedelta(0, 70)
         time_in_future = timestamp + add_seconds
         expire_time = time_in_future if datetime else to_timestamp(time_in_future)
-        aware_time_in_future = UTC.localize(time_in_future)
+        aware_time_in_future = localize(time_in_future, UTC)
 
         invite_link = await bot.create_chat_invite_link(
             channel_id, expire_date=expire_time, member_limit=10
@@ -3426,7 +3548,7 @@ class TestBotWithRequest:
         add_seconds = dtm.timedelta(0, 80)
         time_in_future = timestamp + add_seconds
         expire_time = time_in_future if datetime else to_timestamp(time_in_future)
-        aware_time_in_future = UTC.localize(time_in_future)
+        aware_time_in_future = localize(time_in_future, UTC)
 
         edited_invite_link = await bot.edit_chat_invite_link(
             channel_id,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-from datetime import datetime
+import datetime as dtm
 
 import pytest
 
@@ -40,7 +40,7 @@ class BusinessTestBase:
     id_ = "123"
     user = User(123, "test_user", False)
     user_chat_id = 123
-    date = datetime.now(tz=UTC).replace(microsecond=0)
+    date = dtm.datetime.now(tz=UTC).replace(microsecond=0)
     can_reply = True
     is_enabled = True
     message_ids = (123, 321)

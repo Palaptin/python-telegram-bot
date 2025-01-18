@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -178,9 +178,6 @@ class TestKeyboardButtonRequestChatWithoutRequest(KeyboardButtonRequestChatTestB
         assert request_chat.user_administrator_rights == self.user_administrator_rights
         assert request_chat.bot_administrator_rights == self.bot_administrator_rights
         assert request_chat.bot_is_member == self.bot_is_member
-
-        empty_chat = KeyboardButtonRequestChat.de_json({}, offline_bot)
-        assert empty_chat is None
 
     def test_equality(self):
         a = KeyboardButtonRequestChat(self.request_id, True)

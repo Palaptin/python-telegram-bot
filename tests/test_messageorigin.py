@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-import datetime
+import datetime as dtm
 import inspect
 from copy import deepcopy
 
@@ -39,7 +39,7 @@ ignored = ["self", "api_kwargs"]
 
 
 class MODefaults:
-    date: datetime.datetime = to_timestamp(datetime.datetime.utcnow())
+    date: dtm.datetime = to_timestamp(dtm.datetime.utcnow())
     chat = Chat(1, Chat.CHANNEL)
     message_id = 123
     author_signautre = "PTB"
@@ -106,7 +106,7 @@ def iter_args(
         if param.name in ignored:
             continue
         inst_at, json_at = getattr(instance, param.name), getattr(de_json_inst, param.name)
-        if isinstance(json_at, datetime.datetime):  # Convert datetime to int
+        if isinstance(json_at, dtm.datetime):  # Convert datetime to int
             json_at = to_timestamp(json_at)
         if (
             param.default is not inspect.Parameter.empty and include_optional
@@ -138,7 +138,6 @@ class TestMessageOriginTypesWithoutRequest:
 
     def test_de_json_required_args(self, offline_bot, message_origin_type):
         cls = message_origin_type.__class__
-        assert cls.de_json({}, offline_bot) is None
 
         json_dict = make_json_dict(message_origin_type)
         const_message_origin = MessageOrigin.de_json(json_dict, offline_bot)

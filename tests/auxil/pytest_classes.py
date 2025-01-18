@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 #  A library that provides a Python interface to the Telegram Bot API
-#  Copyright (C) 2015-2024
+#  Copyright (C) 2015-2025
 #  Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 #  This program is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ class PytestExtBot(ExtBot):
         self._unfreeze()
 
     # Here we override get_me for caching because we don't want to call the API repeatedly in tests
-    async def get_me(self, *args, **kwargs):
+    async def get_me(self, *args, **kwargs) -> User:
         return await _mocked_get_me(self)
 
 
@@ -77,7 +77,7 @@ class PytestBot(Bot):
         self._unfreeze()
 
     # Here we override get_me for caching because we don't want to call the API repeatedly in tests
-    async def get_me(self, *args, **kwargs):
+    async def get_me(self, *args, **kwargs) -> User:
         return await _mocked_get_me(self)
 
 

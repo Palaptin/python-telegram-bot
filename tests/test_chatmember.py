@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-import datetime
+import datetime as dtm
 import inspect
 from copy import deepcopy
 
@@ -43,7 +43,7 @@ class CMDefaults:
     user = User(1, "First name", False)
     custom_title: str = "PTB"
     is_anonymous: bool = True
-    until_date: datetime.datetime = to_timestamp(datetime.datetime.utcnow())
+    until_date: dtm.datetime = to_timestamp(dtm.datetime.utcnow())
     can_be_edited: bool = False
     can_change_info: bool = True
     can_post_messages: bool = True
@@ -153,10 +153,8 @@ def make_json_dict(instance: ChatMember, include_optional_args: bool = False) ->
         # If we want to test all args (for de_json)
         # or if the param is optional but for backwards compatability
         elif (
-            param.default is not inspect.Parameter.empty
-            and include_optional_args
-            or param.name in ["can_delete_stories", "can_post_stories", "can_edit_stories"]
-        ):
+            param.default is not inspect.Parameter.empty and include_optional_args
+        ) or param.name in ["can_delete_stories", "can_post_stories", "can_edit_stories"]:
             json_dict[param.name] = val
     return json_dict
 
@@ -173,7 +171,7 @@ def iter_args(instance: ChatMember, de_json_inst: ChatMember, include_optional: 
         if param.name in ignored:
             continue
         inst_at, json_at = getattr(instance, param.name), getattr(de_json_inst, param.name)
-        if isinstance(json_at, datetime.datetime):  # Convert datetime to int
+        if isinstance(json_at, dtm.datetime):  # Convert dtm to int
             json_at = to_timestamp(json_at)
         if (
             param.default is not inspect.Parameter.empty and include_optional
@@ -207,7 +205,6 @@ class TestChatMemberTypesWithoutRequest:
 
     def test_de_json_required_args(self, offline_bot, chat_member_type):
         cls = chat_member_type.__class__
-        assert cls.de_json({}, offline_bot) is None
 
         json_dict = make_json_dict(chat_member_type)
         const_chat_member = ChatMember.de_json(json_dict, offline_bot)

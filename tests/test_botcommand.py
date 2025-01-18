@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -44,8 +44,6 @@ class TestBotCommandWithoutRequest:
 
         assert bot_command.command == self.command
         assert bot_command.description == self.description
-
-        assert BotCommand.de_json(None, offline_bot) is None
 
     def test_to_dict(self, bot_command):
         bot_command_dict = bot_command.to_dict()

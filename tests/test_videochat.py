@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -162,7 +162,6 @@ class TestVideoChatScheduledWithoutRequest:
         assert VideoChatScheduled(self.start_date).start_date == self.start_date
 
     def test_de_json(self, offline_bot):
-        assert VideoChatScheduled.de_json({}, bot=offline_bot) is None
 
         json_dict = {"start_date": to_timestamp(self.start_date)}
         video_chat_scheduled = VideoChatScheduled.de_json(json_dict, offline_bot)

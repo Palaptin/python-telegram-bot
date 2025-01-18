@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -118,9 +118,6 @@ class TestMenuButtonWithoutRequest(MenuButtonTestBase):
             assert menu_button.web_app == self.web_app
         if "text" in cls.__slots__:
             assert menu_button.text == self.text
-
-        assert cls.de_json(None, offline_bot) is None
-        assert MenuButton.de_json({}, offline_bot) is None
 
     def test_de_json_invalid_type(self, offline_bot):
         json_dict = {"type": "invalid", "text": self.text, "web_app": self.web_app.to_dict()}

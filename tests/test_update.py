@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,9 +16,9 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
+import datetime as dtm
 import time
 from copy import deepcopy
-from datetime import datetime
 
 import pytest
 
@@ -47,6 +47,7 @@ from telegram import (
     PreCheckoutQuery,
     ReactionCount,
     ReactionTypeEmoji,
+    ShippingAddress,
     ShippingQuery,
     Update,
     User,
@@ -57,7 +58,7 @@ from tests.auxil.slots import mro_slots
 
 message = Message(
     1,
-    datetime.utcnow(),
+    dtm.datetime.utcnow(),
     Chat(1, ""),
     from_user=User(1, "", False),
     text="Text",
@@ -65,7 +66,7 @@ message = Message(
 )
 channel_post = Message(
     1,
-    datetime.utcnow(),
+    dtm.datetime.utcnow(),
     Chat(1, ""),
     text="Text",
     sender_chat=Chat(1, ""),
@@ -139,7 +140,7 @@ deleted_business_messages = BusinessMessagesDeleted(
 
 business_message = Message(
     1,
-    datetime.utcnow(),
+    dtm.datetime.utcnow(),
     Chat(1, ""),
     User(1, "", False),
 )
@@ -158,7 +159,11 @@ params = [
     {"edited_channel_post": channel_post},
     {"inline_query": InlineQuery(1, User(1, "", False), "", "")},
     {"chosen_inline_result": ChosenInlineResult("id", User(1, "", False), "")},
-    {"shipping_query": ShippingQuery("id", User(1, "", False), "", None)},
+    {
+        "shipping_query": ShippingQuery(
+            "id", User(1, "", False), "", ShippingAddress("", "", "", "", "", "")
+        )
+    },
     {"pre_checkout_query": PreCheckoutQuery("id", User(1, "", False), "", 0, "")},
     {"poll": Poll("id", "?", [PollOption(".", 1)], False, False, False, Poll.REGULAR, True)},
     {
@@ -251,11 +256,6 @@ class TestUpdateWithoutRequest(UpdateTestBase):
                 i += 1
                 assert getattr(update, _type) == paramdict[_type]
         assert i == 1
-
-    def test_update_de_json_empty(self, offline_bot):
-        update = Update.de_json(None, offline_bot)
-
-        assert update is None
 
     def test_to_dict(self, update):
         update_dict = update.to_dict()

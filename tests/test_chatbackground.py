@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -170,7 +170,6 @@ class TestBackgroundTypeWithoutRequest:
 
     def test_de_json_required_args(self, offline_bot, background_type):
         cls = background_type.__class__
-        assert cls.de_json({}, offline_bot) is None
 
         json_dict = make_json_dict(background_type)
         const_background_type = BackgroundType.de_json(json_dict, offline_bot)
@@ -277,7 +276,6 @@ class TestBackgroundFillWithoutRequest:
 
     def test_de_json_required_args(self, offline_bot, background_fill):
         cls = background_fill.__class__
-        assert cls.de_json({}, offline_bot) is None
 
         json_dict = make_json_dict(background_fill)
         const_background_fill = BackgroundFill.de_json(json_dict, offline_bot)

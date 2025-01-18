@@ -4,6 +4,90 @@
 Changelog
 =========
 
+Version 21.10
+=============
+
+*Released 2025-01-03*
+
+This is the technical changelog for version 21.10. More elaborate release notes can be found in the news channel `@pythontelegrambotchannel <https://t.me/pythontelegrambotchannel>`_.
+
+Major Changes
+-------------
+
+- Full Support for Bot API 8.2 (:pr:`4633`)
+- Bump ``apscheduler`` & Deprecate ``pytz`` Support (:pr:`4582`)
+
+New Features
+------------
+- Add Parameter ``pattern`` to ``JobQueue.jobs()`` (:pr:`4613` closes :issue:`4544`)
+- Allow Input of Type ``Sticker`` for Several Methods (:pr:`4616` closes :issue:`4580`)
+
+Bug Fixes
+---------
+- Ensure Forward Compatibility of ``Gift`` and ``Gifts`` (:pr:`4634` closes :issue:`4637`)
+
+
+Documentation Improvements & Internal Changes
+---------------------------------------------
+
+- Use Custom Labels for ``dependabot`` PRs (:pr:`4621`)
+- Remove Redundant ``pylint`` Suppressions (:pr:`4628`)
+- Update Copyright to 2025 (:pr:`4631`)
+- Refactor Module Structure and Tests for Star Payments Classes (:pr:`4615` closes :issue:`4593`)
+- Unify ``datetime`` Imports (:pr:`4605` by `cuevasrja <https://github.com/cuevasrja>`_ closes :issue:`4577`)
+- Add Static Security Analysis of GitHub Actions Workflows (:pr:`4606`)
+
+Dependency Updates
+------------------
+
+- Bump ``astral-sh/setup-uv`` from 4.2.0 to 5.1.0 (:pr:`4625`)
+- Bump ``codecov/codecov-action`` from 5.1.1 to 5.1.2 (:pr:`4622`)
+- Bump ``actions/upload-artifact`` from 4.4.3 to 4.5.0 (:pr:`4623`)
+- Bump ``github/codeql-action`` from 3.27.9 to 3.28.0 (:pr:`4624`)
+
+Version 21.9
+============
+
+*Released 2024-12-07*
+
+This is the technical changelog for version 21.9. More elaborate release notes can be found in the news channel `@pythontelegrambotchannel <https://t.me/pythontelegrambotchannel>`_.
+
+Major Changes
+-------------
+
+- Full Support for Bot API 8.1 (:pr:`4594` closes :issue:`4592`)
+
+Minor Changes
+-------------
+
+- Use ``MessageLimit.DEEP_LINK_LENGTH`` in ``helpers.create_deep_linked_url`` (:pr:`4597` by `nemacysts <https://github.com/nemacysts>`_)
+- Allow ``Sequence`` Input for ``allowed_updates`` in ``Application`` and ``Updater`` Methods (:pr:`4589` by `nemacysts <https://github.com/nemacysts>`_)
+
+Dependency Updates
+------------------
+
+- Update ``aiolimiter`` requirement from ~=1.1.0 to >=1.1,<1.3 (:pr:`4595`)
+- Bump ``pytest`` from 8.3.3 to 8.3.4 (:pr:`4596`)
+- Bump ``codecov/codecov-action`` from 4 to 5 (:pr:`4585`)
+- Bump ``pylint`` to v3.3.2 to Improve Python 3.13 Support (:pr:`4590` by `nemacysts <https://github.com/nemacysts>`_)
+- Bump ``srvaroa/labeler`` from 1.11.1 to 1.12.0 (:pr:`4586`)
+
+Version 21.8
+============
+*Released 2024-12-01*
+
+This is the technical changelog for version 21.8. More elaborate release notes can be found in the news channel `@pythontelegrambotchannel <https://t.me/pythontelegrambotchannel>`_.
+
+Major Changes
+-------------
+
+- Full Support for Bot API 8.0 (:pr:`4568`, :pr:`4566` closes :issue:`4567`, :pr:`4572`, :pr:`4571`, :pr:`4570`, :pr:`4576`, :pr:`4574`)
+
+Documentation Improvements
+--------------------------
+
+- Documentation Improvements (:pr:`4565` by `Snehashish06 <https://github.com/Snehashish06>`_, :pr:`4573`)
+
 Version 21.7
 ============
 *Released 2024-11-04*

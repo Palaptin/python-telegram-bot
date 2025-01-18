@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -145,7 +145,9 @@ class TestVoiceWithoutRequest(VoiceTestBase):
         assert await offline_bot.send_voice(chat_id, voice=voice)
 
     @pytest.mark.parametrize("local_mode", [True, False])
-    async def test_send_voice_local_files(self, monkeypatch, offline_bot, chat_id, local_mode):
+    async def test_send_voice_local_files(
+        self, dummy_message_dict, monkeypatch, offline_bot, chat_id, local_mode
+    ):
         try:
             offline_bot._local_mode = local_mode
             # For just test that the correct paths are passed as we have no local Bot API set up
@@ -159,6 +161,7 @@ class TestVoiceWithoutRequest(VoiceTestBase):
                     test_flag = data.get("voice") == expected
                 else:
                     test_flag = isinstance(data.get("voice"), InputFile)
+                return dummy_message_dict
 
             monkeypatch.setattr(offline_bot, "_post", make_assertion)
             await offline_bot.send_voice(chat_id, file)

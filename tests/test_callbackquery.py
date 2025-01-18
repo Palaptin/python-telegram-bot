@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 
-from datetime import datetime
+import datetime as dtm
 
 import pytest
 
@@ -58,7 +58,9 @@ class CallbackQueryTestBase:
     id_ = "id"
     from_user = User(1, "test_user", False)
     chat_instance = "chat_instance"
-    message = Message(3, datetime.utcnow(), Chat(4, "private"), from_user=User(5, "bot", False))
+    message = Message(
+        3, dtm.datetime.utcnow(), Chat(4, "private"), from_user=User(5, "bot", False)
+    )
     data = "data"
     inline_message_id = "inline_message_id"
     game_short_name = "the_game"

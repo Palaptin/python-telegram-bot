@@ -2,7 +2,7 @@
 # pylint: disable=redefined-builtin
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains an object that represents a Telegram Chat."""
+import datetime as dtm
 from collections.abc import Sequence
-from datetime import datetime
 from html import escape
 from typing import TYPE_CHECKING, Final, Optional, Union
 
@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         ChatMember,
         Contact,
         Document,
+        Gift,
         InlineKeyboardMarkup,
         InputMediaAudio,
         InputMediaDocument,
@@ -383,7 +384,7 @@ class _ChatBase(TelegramObject):
         self,
         user_id: int,
         revoke_messages: Optional[bool] = None,
-        until_date: Optional[Union[int, datetime]] = None,
+        until_date: Optional[Union[int, dtm.datetime]] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
         write_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -655,7 +656,7 @@ class _ChatBase(TelegramObject):
         self,
         user_id: int,
         permissions: ChatPermissions,
-        until_date: Optional[Union[int, datetime]] = None,
+        until_date: Optional[Union[int, dtm.datetime]] = None,
         use_independent_chat_permissions: Optional[bool] = None,
         *,
         read_timeout: ODVInput[float] = DEFAULT_NONE,
@@ -2115,7 +2116,7 @@ class _ChatBase(TelegramObject):
         explanation: Optional[str] = None,
         explanation_parse_mode: ODVInput[str] = DEFAULT_NONE,
         open_period: Optional[int] = None,
-        close_date: Optional[Union[int, datetime]] = None,
+        close_date: Optional[Union[int, dtm.datetime]] = None,
         explanation_entities: Optional[Sequence["MessageEntity"]] = None,
         protect_content: ODVInput[bool] = DEFAULT_NONE,
         message_thread_id: Optional[int] = None,
@@ -2587,7 +2588,7 @@ class _ChatBase(TelegramObject):
 
     async def create_invite_link(
         self,
-        expire_date: Optional[Union[int, datetime]] = None,
+        expire_date: Optional[Union[int, dtm.datetime]] = None,
         member_limit: Optional[int] = None,
         name: Optional[str] = None,
         creates_join_request: Optional[bool] = None,
@@ -2631,7 +2632,7 @@ class _ChatBase(TelegramObject):
     async def edit_invite_link(
         self,
         invite_link: Union[str, "ChatInviteLink"],
-        expire_date: Optional[Union[int, datetime]] = None,
+        expire_date: Optional[Union[int, dtm.datetime]] = None,
         member_limit: Optional[int] = None,
         name: Optional[str] = None,
         creates_join_request: Optional[bool] = None,
@@ -3434,6 +3435,110 @@ class _ChatBase(TelegramObject):
             business_connection_id=business_connection_id,
             payload=payload,
             allow_paid_broadcast=allow_paid_broadcast,
+        )
+
+    async def send_gift(
+        self,
+        gift_id: Union[str, "Gift"],
+        text: Optional[str] = None,
+        text_parse_mode: ODVInput[str] = DEFAULT_NONE,
+        text_entities: Optional[Sequence["MessageEntity"]] = None,
+        pay_for_upgrade: Optional[bool] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Shortcut for::
+
+             await bot.send_gift(user_id=update.effective_chat.id, *args, **kwargs )
+
+        For the documentation of the arguments, please see :meth:`telegram.Bot.send_gift`.
+
+        Caution:
+            Can only work, if the chat is a private chat, see :attr:`type`.
+
+        .. versionadded:: 21.8
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+        """
+        return await self.get_bot().send_gift(
+            user_id=self.id,
+            gift_id=gift_id,
+            text=text,
+            text_parse_mode=text_parse_mode,
+            text_entities=text_entities,
+            pay_for_upgrade=pay_for_upgrade,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def verify(
+        self,
+        custom_description: Optional[str] = None,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Shortcut for::
+
+             await bot.verify_chat(chat_id=update.effective_chat.id, *args, **kwargs)
+
+        For the documentation of the arguments, please see
+        :meth:`telegram.Bot.verify_chat`.
+
+        .. versionadded:: 21.10
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+        """
+        return await self.get_bot().verify_chat(
+            chat_id=self.id,
+            custom_description=custom_description,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
+        )
+
+    async def remove_verification(
+        self,
+        *,
+        read_timeout: ODVInput[float] = DEFAULT_NONE,
+        write_timeout: ODVInput[float] = DEFAULT_NONE,
+        connect_timeout: ODVInput[float] = DEFAULT_NONE,
+        pool_timeout: ODVInput[float] = DEFAULT_NONE,
+        api_kwargs: Optional[JSONDict] = None,
+    ) -> bool:
+        """Shortcut for::
+
+             await bot.remove_chat_verification(chat_id=update.effective_chat.id, *args, **kwargs)
+
+        For the documentation of the arguments, please see
+        :meth:`telegram.Bot.remove_chat_verification`.
+
+        .. versionadded:: 21.10
+
+        Returns:
+            :obj:`bool`: On success, :obj:`True` is returned.
+        """
+        return await self.get_bot().remove_chat_verification(
+            chat_id=self.id,
+            read_timeout=read_timeout,
+            write_timeout=write_timeout,
+            connect_timeout=connect_timeout,
+            pool_timeout=pool_timeout,
+            api_kwargs=api_kwargs,
         )
 
 

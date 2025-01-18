@@ -1,5 +1,5 @@
 # python-telegram-bot - a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # by the python-telegram-bot contributors <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -64,6 +64,7 @@ __all__ = [
     "FloodLimit",
     "ForumIconColor",
     "ForumTopicLimit",
+    "GiftLimit",
     "GiveawayLimit",
     "InlineKeyboardButtonLimit",
     "InlineKeyboardMarkupLimit",
@@ -94,6 +95,7 @@ __all__ = [
     "ReactionType",
     "ReplyLimit",
     "RevenueWithdrawalStateType",
+    "StarTransactions",
     "StarTransactionsLimit",
     "StickerFormat",
     "StickerLimit",
@@ -102,16 +104,17 @@ __all__ = [
     "TransactionPartnerType",
     "UpdateType",
     "UserProfilePhotosLimit",
+    "VerifyLimit",
     "WebhookLimit",
 ]
 
-import datetime
+import datetime as dtm
 import sys
 from enum import Enum
 from typing import Final, NamedTuple, Optional
 
 from telegram._utils.datetime import UTC
-from telegram._utils.enum import IntEnum, StringEnum
+from telegram._utils.enum import FloatEnum, IntEnum, StringEnum
 
 
 class _BotAPIVersion(NamedTuple):
@@ -152,7 +155,7 @@ class _AccentColor(NamedTuple):
 #: :data:`telegram.__bot_api_version_info__`.
 #:
 #: .. versionadded:: 20.0
-BOT_API_VERSION_INFO: Final[_BotAPIVersion] = _BotAPIVersion(major=7, minor=11)
+BOT_API_VERSION_INFO: Final[_BotAPIVersion] = _BotAPIVersion(major=8, minor=2)
 #: :obj:`str`: Telegram Bot API
 #: version supported by this version of `python-telegram-bot`. Also available as
 #: :data:`telegram.__bot_api_version__`.
@@ -170,7 +173,7 @@ SUPPORTED_WEBHOOK_PORTS: Final[list[int]] = [443, 80, 88, 8443]
 #: This date literal is used in :class:`telegram.InaccessibleMessage`
 #:
 #: .. versionadded:: 20.8
-ZERO_DATE: Final[datetime.datetime] = datetime.datetime(1970, 1, 1, tzinfo=UTC)
+ZERO_DATE: Final[dtm.datetime] = dtm.datetime(1970, 1, 1, tzinfo=UTC)
 
 
 class AccentColor(Enum):
@@ -1224,6 +1227,21 @@ class ForumIconColor(IntEnum):
     """
 
 
+class GiftLimit(IntEnum):
+    """This enum contains limitations for :meth:`~telegram.Bot.send_gift`.
+    The enum members of this enumeration are instances of :class:`int` and can be treated as such.
+
+    .. versionadded:: 21.8
+    """
+
+    __slots__ = ()
+
+    MAX_TEXT_LENGTH = 255
+    """:obj:`int`: Maximum number of characters in a :obj:`str` passed as the
+    :paramref:`~telegram.Bot.send_gift.text` parameter of :meth:`~telegram.Bot.send_gift`.
+    """
+
+
 class GiveawayLimit(IntEnum):
     """This enum contains limitations for :class:`telegram.Giveaway` and related classes.
     The enum members of this enumeration are instances of :class:`int` and can be treated as such.
@@ -1819,7 +1837,6 @@ class MessageLimit(IntEnum):
     :paramref:`~telegram.Bot.edit_message_text.text` parameter of
     :meth:`telegram.Bot.edit_message_text`.
     """
-    # TODO this constant is not used. helpers.py contains 64 as a number
     DEEP_LINK_LENGTH = 64
     """:obj:`int`: Maximum number of characters for a deep link."""
     # TODO this constant is not used anywhere
@@ -2445,8 +2462,25 @@ class RevenueWithdrawalStateType(StringEnum):
     """:obj:`str`: A withdrawal failed and the transaction was refunded."""
 
 
+class StarTransactions(FloatEnum):
+    """This enum contains constants for :class:`telegram.StarTransaction`.
+    The enum members of this enumeration are instances of :class:`float` and can be treated as
+    such.
+
+    .. versionadded:: 21.9
+    """
+
+    __slots__ = ()
+
+    NANOSTAR_VALUE = 1 / 1000000000
+    """:obj:`float`: The value of one nanostar as used in
+    :attr:`telegram.StarTransaction.nanostar_amount`.
+    """
+
+
 class StarTransactionsLimit(IntEnum):
-    """This enum contains limitations for :class:`telegram.Bot.get_star_transactions`.
+    """This enum contains limitations for :class:`telegram.Bot.get_star_transactions` and
+    :class:`telegram.StarTransaction`.
     The enum members of this enumeration are instances of :class:`int` and can be treated as such.
 
     .. versionadded:: 21.4
@@ -2462,6 +2496,20 @@ class StarTransactionsLimit(IntEnum):
     """:obj:`int`: Maximum value allowed for the
     :paramref:`~telegram.Bot.get_star_transactions.limit` parameter of
     :meth:`telegram.Bot.get_star_transactions`."""
+    NANOSTAR_MIN_AMOUNT = -999999999
+    """:obj:`int`: Minimum value allowed for :paramref:`~telegram.AffiliateInfo.nanostar_amount`
+    parameter of :class:`telegram.AffiliateInfo`.
+
+    .. versionadded:: 21.9
+    """
+    NANOSTAR_MAX_AMOUNT = 999999999
+    """:obj:`int`: Maximum value allowed for :paramref:`~telegram.StarTransaction.nanostar_amount`
+    parameter of :class:`telegram.StarTransaction` and
+    :paramref:`~telegram.AffiliateInfo.nanostar_amount` parameter of
+    :class:`telegram.AffiliateInfo`.
+
+    .. versionadded:: 21.9
+    """
 
 
 class StickerFormat(StringEnum):
@@ -2606,6 +2654,11 @@ class TransactionPartnerType(StringEnum):
 
     __slots__ = ()
 
+    AFFILIATE_PROGRAM = "affiliate_program"
+    """:obj:`str`: Transaction with Affiliate Program.
+
+    .. versionadded:: 21.9
+    """
     FRAGMENT = "fragment"
     """:obj:`str`: Withdrawal transaction with Fragment."""
     OTHER = "other"
@@ -2902,6 +2955,19 @@ class InvoiceLimit(IntEnum):
 
     .. versionadded:: 21.6
     """
+    SUBSCRIPTION_PERIOD = dtm.timedelta(days=30).total_seconds()
+    """:obj:`int`: The period of time for which the subscription is active before
+    the next payment, passed as :paramref:`~telegram.Bot.create_invoice_link.subscription_period`
+    parameter of :meth:`telegram.Bot.create_invoice_link`.
+
+    .. versionadded:: 21.8
+    """
+    SUBSCRIPTION_MAX_PRICE = 2500
+    """:obj:`int`: The maximum price of a subscription created wtih
+    :meth:`telegram.Bot.create_invoice_link`.
+
+    .. versionadded:: 21.9
+    """
 
 
 class UserProfilePhotosLimit(IntEnum):
@@ -3164,3 +3230,20 @@ class ReactionEmoji(StringEnum):
     """:obj:`str`: Woman Shrugging"""
     POUTING_FACE = "😡"
     """:obj:`str`: Pouting face"""
+
+
+class VerifyLimit(IntEnum):
+    """This enum contains limitations for :meth:`~telegram.Bot.verify_chat` and
+    :meth:`~telegram.Bot.verify_user`.
+    The enum members of this enumeration are instances of :class:`int` and can be treated as such.
+
+    .. versionadded:: 21.10
+    """
+
+    __slots__ = ()
+
+    MAX_TEXT_LENGTH = 70
+    """:obj:`int`: Maximum number of characters in a :obj:`str` passed as the
+    :paramref:`~telegram.Bot.verify_chat.custom_description` or
+    :paramref:`~telegram.Bot.verify_user.custom_description` parameter.
+    """

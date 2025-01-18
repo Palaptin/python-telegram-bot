@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -58,8 +58,6 @@ class TestUsersSharedWithoutRequest(UsersSharedTestBase):
 
         assert users_shared.request_id == self.request_id
         assert users_shared.users == self.users
-
-        assert UsersShared.de_json({}, offline_bot) is None
 
     def test_equality(self):
         a = UsersShared(self.request_id, users=self.users)
@@ -208,8 +206,6 @@ class TestSharedUserWithoutRequest(SharedUserTestBase):
         assert shared_user.last_name == self.last_name
         assert shared_user.username == self.username
         assert shared_user.photo == self.photo
-
-        assert SharedUser.de_json({}, offline_bot) is None
 
     def test_equality(self, chat_shared):
         a = SharedUser(

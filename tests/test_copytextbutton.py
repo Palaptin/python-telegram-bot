@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -46,7 +46,6 @@ class TestCopyTextButtonWithoutRequest(CopyTextButtonTestBase):
         assert copy_text_button.api_kwargs == {}
 
         assert copy_text_button.text == self.text
-        assert CopyTextButton.de_json(None, offline_bot) is None
 
     def test_to_dict(self, copy_text_button):
         copy_text_button_dict = copy_text_button.to_dict()

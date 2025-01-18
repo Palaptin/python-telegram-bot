@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -54,8 +54,6 @@ class TestGameHighScoreWithoutRequest(GameHighScoreTestBase):
         assert highscore.position == self.position
         assert highscore.user == self.user
         assert highscore.score == self.score
-
-        assert GameHighScore.de_json(None, offline_bot) is None
 
     def test_to_dict(self, game_highscore):
         game_highscore_dict = game_highscore.to_dict()

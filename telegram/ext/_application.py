@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -750,7 +750,7 @@ class Application(
         write_timeout: ODVInput[float] = DEFAULT_NONE,
         connect_timeout: ODVInput[float] = DEFAULT_NONE,
         pool_timeout: ODVInput[float] = DEFAULT_NONE,
-        allowed_updates: Optional[list[str]] = None,
+        allowed_updates: Optional[Sequence[str]] = None,
         drop_pending_updates: Optional[bool] = None,
         close_loop: bool = True,
         stop_signals: ODVInput[Sequence[int]] = DEFAULT_NONE,
@@ -827,8 +827,11 @@ class Application(
                     :meth:`telegram.ext.ApplicationBuilder.get_updates_pool_timeout`.
             drop_pending_updates (:obj:`bool`, optional): Whether to clean any pending updates on
                 Telegram servers before actually starting to poll. Default is :obj:`False`.
-            allowed_updates (list[:obj:`str`], optional): Passed to
+            allowed_updates (Sequence[:obj:`str`], optional): Passed to
                 :meth:`telegram.Bot.get_updates`.
+
+                .. versionchanged:: 21.9
+                    Accepts any :class:`collections.abc.Sequence` as input instead of just a list
             close_loop (:obj:`bool`, optional): If :obj:`True`, the current event loop will be
                 closed upon shutdown. Defaults to :obj:`True`.
 
@@ -892,7 +895,7 @@ class Application(
         key: Optional[Union[str, Path]] = None,
         bootstrap_retries: int = 0,
         webhook_url: Optional[str] = None,
-        allowed_updates: Optional[list[str]] = None,
+        allowed_updates: Optional[Sequence[str]] = None,
         drop_pending_updates: Optional[bool] = None,
         ip_address: Optional[str] = None,
         max_connections: int = 40,
@@ -958,8 +961,11 @@ class Application(
             webhook_url (:obj:`str`, optional): Explicitly specify the webhook url. Useful behind
                 NAT, reverse proxy, etc. Default is derived from :paramref:`listen`,
                 :paramref:`port`, :paramref:`url_path`, :paramref:`cert`, and :paramref:`key`.
-            allowed_updates (list[:obj:`str`], optional): Passed to
+            allowed_updates (Sequence[:obj:`str`], optional): Passed to
                 :meth:`telegram.Bot.set_webhook`.
+
+                .. versionchanged:: 21.9
+                    Accepts any :class:`collections.abc.Sequence` as input instead of just a list
             drop_pending_updates (:obj:`bool`, optional): Whether to clean any pending updates on
                 Telegram servers before actually starting to poll. Default is :obj:`False`.
             ip_address (:obj:`str`, optional): Passed to :meth:`telegram.Bot.set_webhook`.

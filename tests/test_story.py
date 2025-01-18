@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -45,7 +45,6 @@ class TestStoryWithoutRequest(StoryTestBase):
         assert story.chat == self.chat
         assert story.id == self.id
         assert isinstance(story, Story)
-        assert Story.de_json(None, offline_bot) is None
 
     def test_to_dict(self, story):
         story_dict = story.to_dict()

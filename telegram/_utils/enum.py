@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -74,3 +74,17 @@ class IntEnum(_enum.IntEnum):  # pylint: disable=invalid-slots
 
         def __str__(self) -> str:
             return str(self.value)
+
+
+class FloatEnum(float, _enum.Enum):
+    """Helper class for float enums where ``str(member)`` prints the value, but ``repr(member)``
+    gives ``EnumName.MEMBER_NAME``.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}.{self.name}>"
+
+    def __str__(self) -> str:
+        return str(self.value)

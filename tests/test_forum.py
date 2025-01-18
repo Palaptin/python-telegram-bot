@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 import asyncio
-import datetime
+import datetime as dtm
 
 import pytest
 
@@ -60,7 +60,6 @@ class TestForumTopicWithoutRequest:
         assert forum_topic_object.icon_custom_emoji_id == emoji_id
 
     def test_de_json(self, offline_bot, emoji_id, forum_group_id):
-        assert ForumTopic.de_json(None, bot=offline_bot) is None
 
         json_dict = {
             "message_thread_id": forum_group_id,
@@ -243,7 +242,7 @@ class TestForumMethodsWithRequest:
     async def test_edit_general_forum_topic(self, bot, forum_group_id):
         result = await bot.edit_general_forum_topic(
             chat_id=forum_group_id,
-            name=f"GENERAL_{datetime.datetime.now().timestamp()}",
+            name=f"GENERAL_{dtm.datetime.now().timestamp()}",
         )
         assert result is True, "Failed to edit general forum topic"
         # no way of checking the edited name, just the boolean result
@@ -307,7 +306,6 @@ class TestForumTopicCreatedWithoutRequest:
         assert topic_created.name == TEST_TOPIC_NAME
 
     def test_de_json(self, offline_bot):
-        assert ForumTopicCreated.de_json(None, bot=offline_bot) is None
 
         json_dict = {"icon_color": TEST_TOPIC_ICON_COLOR, "name": TEST_TOPIC_NAME}
         action = ForumTopicCreated.de_json(json_dict, offline_bot)
@@ -395,8 +393,6 @@ class TestForumTopicEdited:
         assert topic_edited.icon_custom_emoji_id == emoji_id
 
     def test_de_json(self, bot, emoji_id):
-        assert ForumTopicEdited.de_json(None, bot=bot) is None
-
         json_dict = {"name": TEST_TOPIC_NAME, "icon_custom_emoji_id": emoji_id}
         action = ForumTopicEdited.de_json(json_dict, bot)
         assert action.api_kwargs == {}

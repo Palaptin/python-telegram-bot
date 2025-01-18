@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the ConversationHandler."""
 import asyncio
-import datetime
+import datetime as dtm
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Generic, NoReturn, Optional, Union, cast
 
@@ -230,7 +230,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
         self: "ConversationHandler[CCT]",
         conversation_states: "ConversationStates[CCT]",
         key_builder: Optional[ConversationHandlerKey] = None,
-        conversation_timeout: Optional[Union[float, datetime.timedelta]] = None,
+        conversation_timeout: Optional[Union[float, dtm.timedelta]] = None,
         name: Optional[str] = None,
         persistent: bool = False,
         block: DVType[bool] = DEFAULT_TRUE,
@@ -253,9 +253,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
         # Store the actual setting in a protected variable instead
         self._block: DVType[bool] = block
 
-        self._conversation_timeout: Optional[Union[float, datetime.timedelta]] = (
-            conversation_timeout
-        )
+        self._conversation_timeout: Optional[Union[float, dtm.timedelta]] = conversation_timeout
         self._name: Optional[str] = name
 
         # if conversation_timeout is used, this dict is used to schedule a job which runs when the
@@ -308,7 +306,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
     @property
     def conversation_timeout(
         self,
-    ) -> Optional[Union[float, datetime.timedelta]]:
+    ) -> Optional[Union[float, dtm.timedelta]]:
         """:obj:`float` | :obj:`datetime.timedelta`: Optional. When this
         handler is inactive more than this timeout (in seconds), it will be automatically
         ended.
