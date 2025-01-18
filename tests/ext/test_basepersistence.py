@@ -38,14 +38,14 @@ from telegram.ext import (
     BaseHandler,
     BasePersistence,
     CallbackContext,
+    ConversationData,
     ConversationHandler,
+    ConversationStates,
     ExtBot,
     MessageHandler,
     PersistenceInput,
     filters,
 )
-from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
-from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
 from telegram.request import HTTPXRequest
 from telegram.warnings import PTBUserWarning
 from tests.auxil.build_messages import make_message, make_message_update

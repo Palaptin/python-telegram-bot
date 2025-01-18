@@ -48,6 +48,7 @@ from telegram.error import TelegramError
 from telegram.ext._basepersistence import BasePersistence
 from telegram.ext._contexttypes import ContextTypes
 from telegram.ext._extbot import ExtBot
+from telegram.ext._handlers._conversationhandler.pendingstate import PendingState
 from telegram.ext._handlers.basehandler import BaseHandler
 from telegram.ext._updater import Updater
 from telegram.ext._utils.stack import was_called_by
@@ -62,7 +63,7 @@ if TYPE_CHECKING:
     from telegram.ext import ConversationHandler, JobQueue
     from telegram.ext._applicationbuilder import InitApplicationBuilder
     from telegram.ext._baseupdateprocessor import BaseUpdateProcessor
-    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
+    from telegram.ext._handlers._conversationhandler.conversationdata import ConversationData
     from telegram.ext._jobqueue import Job
 
 DEFAULT_GROUP: int = 0
@@ -1741,7 +1742,6 @@ class Application(
         from telegram.ext._handlers._conversationhandler.conversationhandler import (
             ConversationData,
             ConversationHandler,
-            PendingState,
         )
 
         for name, (key, real_conversation_data) in itertools.chain.from_iterable(

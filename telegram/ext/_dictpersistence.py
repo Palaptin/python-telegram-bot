@@ -22,7 +22,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 from telegram.ext import BasePersistence, PersistenceInput
-from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
+from telegram.ext._handlers._conversationhandler.conversationdata import ConversationData
 from telegram.ext._utils.types import CDCData, ConversationDict
 
 if TYPE_CHECKING:
@@ -461,7 +461,7 @@ class DictPersistence(BasePersistence[dict[Any, Any], dict[Any, Any], dict[Any, 
             for key, conv_data in persistence_data.items():
                 if isinstance(conv_data, int) or conv_data is None:
                     # FOR BACKWARD COMPATIBILITY. ConversationHandler will transform it
-                    conversations[handler][tuple(json.loads(key))] = conv_data  # type: ignore
+                    conversations[handler][tuple(json.loads(key))] = conv_data
                 else:
                     conversations[handler][tuple(json.loads(key))] = ConversationData(
                         tuple(json.loads(conv_data["key"])),

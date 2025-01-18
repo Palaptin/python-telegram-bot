@@ -28,13 +28,11 @@ Warning:
 from collections.abc import Coroutine, MutableMapping
 from typing import TYPE_CHECKING, Any, Callable, TypeVar, Union
 
-from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
-
 if TYPE_CHECKING:
     from typing import Optional
 
     from telegram import Bot
-    from telegram.ext import BaseRateLimiter, CallbackContext, JobQueue
+    from telegram.ext import BaseRateLimiter, CallbackContext, ConversationData, JobQueue
 
 
 CCT = TypeVar("CCT", bound="CallbackContext[Any, Any, Any, Any]")
@@ -57,7 +55,12 @@ JobCallback = Callable[[CCT], Coroutine[Any, Any, Any]]
 """
 
 ConversationKey = tuple[Union[int, str], ...]
-ConversationDict = MutableMapping[ConversationKey, ConversationData]
+COD = TypeVar("COD", bound="ConversationData")
+"""Type of the conversation data for a conversation.
+
+.. versionadded:: NEXT.VERSION
+"""
+ConversationDict = MutableMapping[ConversationKey, COD]
 """dict[tuple[:obj:`int` | :obj:`str`, ...], Optional[:obj:`ConversationData`]]:
     Dicts as maintained by the :class:`telegram.ext.ConversationHandler`.
 
@@ -80,11 +83,6 @@ BT = TypeVar("BT", bound="Bot")
 """Type of the bot.
 
 .. versionadded:: 20.0
-"""
-COD = TypeVar("COD")
-"""Type of the conversation data for a conversation.
-
-.. versionadded:: NEXT.VERSION
 """
 UD = TypeVar("UD")
 """Type of the user data for a single user.

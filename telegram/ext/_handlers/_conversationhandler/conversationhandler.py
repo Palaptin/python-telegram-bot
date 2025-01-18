@@ -40,8 +40,7 @@ from telegram.ext._utils.trackingdict import TrackingDict
 from telegram.ext._utils.types import CCT, COD, ConversationDict, ConversationKey
 
 if TYPE_CHECKING:
-    from telegram.ext import Application, Job, JobQueue
-    from telegram.ext._handlers._conversationhandler.conversationstates import ConversationStates
+    from telegram.ext import Application, ConversationStates, Job, JobQueue
 _CheckUpdateType = tuple[object, ConversationKey, BaseHandler[object, CCT, object], object]
 
 _LOGGER = get_logger(__name__, class_name="ConversationHandler")
@@ -717,7 +716,7 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
                     )
 
         if original_conv_key and original_conv_key != conversation_data.key:
-            del self._conversations[conversation_data.key]
+            del self._conversations[original_conv_key]
 
         self._conversations[conversation_data.key] = conversation_data
         return None
@@ -821,3 +820,39 @@ class ConversationHandler(BaseHandler[object, CCT, object]):
                 current_conversation=conversation_data,
                 timeout_job_kwargs={"misfire_grace_time": None},
             )
+
+    async def get_conversation(self, key: ConversationKey) -> Optional[ConversationData]:
+        return self._conversations.get(key)
+
+    async def update_conversation(
+        self, key: ConversationKey, conv_data: ConversationData, application: "Application"
+    ) -> None:
+
+        context = application.context_types.context.from_update(
+            update=conv_data.update, application=application
+        )
+
+        if key in self._conversations:
+            current_conversation = self._conversations[key]
+        else:
+            # Create a new one
+            current_conversation = ConversationData(
+                key=key,
+                state=None,
+                conversation_context_data=self.conversation_context_data_type,
+                update=None,
+                timeout=None,
+            )
+            self._conversations[key] = current_conversation
+
+        context._conversation_data = current_conversation  # pylint: disable=protected-access
+
+        await self._update_state(
+            new_state=conv_data.state,
+            conversation_data=conv_data,
+            update=conv_data.update,
+            context=context,
+            block=self.block,
+            application=application,
+            original_conv_key=key,
+        )

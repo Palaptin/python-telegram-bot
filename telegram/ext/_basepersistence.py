@@ -18,14 +18,12 @@
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the BasePersistence class."""
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, NamedTuple, NoReturn, Optional
+from typing import Generic, NamedTuple, NoReturn, Optional
 
 from telegram._bot import Bot
 from telegram.ext._extbot import ExtBot
+from telegram.ext._handlers._conversationhandler.conversationdata import ConversationData
 from telegram.ext._utils.types import BD, CD, UD, CDCData, ConversationDict
-
-if TYPE_CHECKING:
-    from telegram.ext._handlers._conversationhandler.conversationhandler import ConversationData
 
 
 class PersistenceInput(NamedTuple):
@@ -272,7 +270,7 @@ class BasePersistence(Generic[UD, CD, BD], ABC):
         """
 
     @abstractmethod
-    async def update_conversation(self, name: str, conversation_data: "ConversationData") -> None:
+    async def update_conversation(self, name: str, conversation_data: ConversationData) -> None:
         """Will be called when a :class:`telegram.ext.ConversationHandler` changes states.
         This allows the storage of the new state in the persistence.
 
