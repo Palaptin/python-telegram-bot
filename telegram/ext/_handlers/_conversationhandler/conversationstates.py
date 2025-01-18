@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the ConversationStates."""
-from typing import Any, Dict, Generic, List, NoReturn, Optional, Set
+from typing import Any, Generic, NoReturn, Optional
 
 from telegram._utils.warnings import warn
 from telegram.ext import ConversationHandler
@@ -30,34 +30,34 @@ class ConversationStates(Generic[CCT]):
     Used as a datastore for ConversationHandler states. Passed in the
     :paramref:`ConversationHandler.__init__.conversation_states` parameter.
     Args:
-        entry_points (List[:class:`telegram.ext.BaseHandler`]): A list of :obj:`BaseHandler`
+        entry_points (list[:class:`telegram.ext.BaseHandler`]): A list of :obj:`BaseHandler`
             objects that
             can trigger the start of the conversation. The first handler whose :meth:`check_update`
             method returns :obj:`True` will be used. If all return :obj:`False`, the update is not
             handled.
-        states (Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]): A :obj:`dict` that
+        states (dict[:obj:`object`, list[:class:`telegram.ext.BaseHandler`]]): A :obj:`dict` that
             defines the different states of conversation a user can be in and one or more
             associated :obj:`BaseHandler` objects that should be used in that state. The first
             handler whose :meth:`check_update` method returns :obj:`True` will be used.
-        state_entry_handlers (Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]): A
+        state_entry_handlers (dict[:obj:`object`, list[:class:`telegram.ext.BaseHandler`]]): A
             :obj:`dict` that defines different :obj:`BaseHandler` objects that should be used by
             entering the corresponding state. The first handler whose :meth:`check_update` method
              returns :obj:`True` will be used. If all return :obj:`False`, the update is not
              handled here.
 
              .. versionadded:: NEXT.VERSION
-        pre_fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
+        pre_fallbacks (list[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             will be checked at first if the user is in a conversation. The first handler which
             :meth:`check_update` method returns :obj:`True` will be used. If all return
             :obj:`False`, the update is not handled here.
 
             .. versionadded:: NEXT.VERSION
-        fallbacks (List[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
+        fallbacks (list[:class:`telegram.ext.BaseHandler`], optional): A list of handlers that
             might be used if the user is in a conversation, but every handler for their current
             state returned :obj:`False` on :meth:`check_update`. The first handler which
             :meth:`check_update` method returns :obj:`True` will be used. If all return
             :obj:`False`, the update is not handled.
-        map_to_parent (Dict[:obj:`object`, :obj:`object`], optional): A :obj:`dict` that can be
+        map_to_parent (dict[:obj:`object`, :obj:`object`], optional): A :obj:`dict` that can be
             used to instruct a child conversation handler to transition into a mapped state on
             its parent conversation handler in place of a specified nested state.
         allow_reentry (:obj:`bool`, optional): If set to :obj:`True`, a user that is currently in a
@@ -77,12 +77,12 @@ class ConversationStates(Generic[CCT]):
 
     def __init__(
         self,
-        entry_points: List[BaseHandler[Any, CCT, object]],
-        states: Dict[object, List[BaseHandler[Any, CCT, object]]],
-        state_entry_handlers: Optional[Dict[object, List[BaseHandler[Any, CCT, object]]]] = None,
-        pre_fallbacks: Optional[List[BaseHandler[Any, CCT, object]]] = None,
-        fallbacks: Optional[List[BaseHandler[Any, CCT, object]]] = None,
-        map_to_parent: Optional[Dict[object, object]] = None,
+        entry_points: list[BaseHandler[Any, CCT, object]],
+        states: dict[object, list[BaseHandler[Any, CCT, object]]],
+        state_entry_handlers: Optional[dict[object, list[BaseHandler[Any, CCT, object]]]] = None,
+        pre_fallbacks: Optional[list[BaseHandler[Any, CCT, object]]] = None,
+        fallbacks: Optional[list[BaseHandler[Any, CCT, object]]] = None,
+        map_to_parent: Optional[dict[object, object]] = None,
         allow_reentry: bool = False,
     ):
         if pre_fallbacks is None:
@@ -93,14 +93,14 @@ class ConversationStates(Generic[CCT]):
 
         if state_entry_handlers is None:
             state_entry_handlers = {}
-        self._entry_points: List[BaseHandler[Any, CCT, object]] = entry_points
-        self._pre_fallbacks: List[BaseHandler[Any, CCT, object]] = pre_fallbacks
-        self._states: Dict[object, List[BaseHandler[Any, CCT, object]]] = states
-        self._state_entry_handlers: Dict[object, List[BaseHandler[Any, CCT, object]]] = (
+        self._entry_points: list[BaseHandler[Any, CCT, object]] = entry_points
+        self._pre_fallbacks: list[BaseHandler[Any, CCT, object]] = pre_fallbacks
+        self._states: dict[object, list[BaseHandler[Any, CCT, object]]] = states
+        self._state_entry_handlers: dict[object, list[BaseHandler[Any, CCT, object]]] = (
             state_entry_handlers
         )
-        self._fallbacks: List[BaseHandler[Any, CCT, object]] = fallbacks
-        self._map_to_parent: Optional[Dict[object, object]] = map_to_parent
+        self._fallbacks: list[BaseHandler[Any, CCT, object]] = fallbacks
+        self._map_to_parent: Optional[dict[object, object]] = map_to_parent
 
         self._allow_reentry: bool = allow_reentry
 
@@ -112,8 +112,8 @@ class ConversationStates(Generic[CCT]):
                     stacklevel=2,
                 )
 
-    def get_all_handlers(self) -> List[BaseHandler[Any, CCT, object]]:
-        all_handlers: List[BaseHandler[Any, CCT, object]] = []
+    def get_all_handlers(self) -> list[BaseHandler[Any, CCT, object]]:
+        all_handlers: list[BaseHandler[Any, CCT, object]] = []
         all_handlers.extend(self.pre_fallbacks)
         all_handlers.extend(self.entry_points)
         all_handlers.extend(self.fallbacks)
@@ -124,8 +124,8 @@ class ConversationStates(Generic[CCT]):
             all_handlers.extend(state_entry_handler)
         return all_handlers
 
-    def get_child_conversations(self) -> Set[ConversationHandler]:
-        child_conversations: Set[ConversationHandler] = set()
+    def get_child_conversations(self) -> set[ConversationHandler]:
+        child_conversations: set[ConversationHandler] = set()
         child_conversations.update(
             handler
             for handler in self.get_all_handlers()
@@ -134,8 +134,8 @@ class ConversationStates(Generic[CCT]):
         return child_conversations
 
     @property
-    def entry_points(self) -> List[BaseHandler[Any, CCT, object]]:
-        """List[:class:`telegram.ext.BaseHandler`]: A list of :obj:`BaseHandler` objects that can
+    def entry_points(self) -> list[BaseHandler[Any, CCT, object]]:
+        """list[:class:`telegram.ext.BaseHandler`]: A list of :obj:`BaseHandler` objects that can
         trigger the start of the conversation.
         """
         return self._entry_points
@@ -147,8 +147,8 @@ class ConversationStates(Generic[CCT]):
         )
 
     @property
-    def pre_fallbacks(self) -> List[BaseHandler[Any, CCT, object]]:
-        """List[:class:`telegram.ext.BaseHandler`]: A list of handlers that will be
+    def pre_fallbacks(self) -> list[BaseHandler[Any, CCT, object]]:
+        """list[:class:`telegram.ext.BaseHandler`]: A list of handlers that will be
         checked before checking the different states.
 
         .. versionadded:: NEXT.VERSION
@@ -162,8 +162,8 @@ class ConversationStates(Generic[CCT]):
         )
 
     @property
-    def states(self) -> Dict[object, List[BaseHandler[Any, CCT, object]]]:
-        """Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]: A :obj:`dict` that
+    def states(self) -> dict[object, list[BaseHandler[Any, CCT, object]]]:
+        """dict[:obj:`object`, list[:class:`telegram.ext.BaseHandler`]]: A :obj:`dict` that
         defines the different states of conversation a user can be in and one or more
         associated :obj:`BaseHandler` objects that should be used in that state.
         """
@@ -174,8 +174,8 @@ class ConversationStates(Generic[CCT]):
         raise AttributeError("You can not assign a new value to states after initialization.")
 
     @property
-    def state_entry_handlers(self) -> Dict[object, List[BaseHandler[Any, CCT, object]]]:
-        """Dict[:obj:`object`, List[:class:`telegram.ext.BaseHandler`]]: A :obj:`dict` that
+    def state_entry_handlers(self) -> dict[object, list[BaseHandler[Any, CCT, object]]]:
+        """dict[:obj:`object`, list[:class:`telegram.ext.BaseHandler`]]: A :obj:`dict` that
         defines different entry handlers for the different states of conversation a user can be
         in and one or more associated :obj:`BaseHandler` objects that should be used in that
         state.
@@ -191,8 +191,8 @@ class ConversationStates(Generic[CCT]):
         )
 
     @property
-    def fallbacks(self) -> List[BaseHandler[Any, CCT, object]]:
-        """List[:class:`telegram.ext.BaseHandler`]: A list of handlers that might be used if
+    def fallbacks(self) -> list[BaseHandler[Any, CCT, object]]:
+        """list[:class:`telegram.ext.BaseHandler`]: A list of handlers that might be used if
         the user is in a conversation, but every handler for their current state returned
         :obj:`False` on :meth:`check_update`.
         """
@@ -203,8 +203,8 @@ class ConversationStates(Generic[CCT]):
         raise AttributeError("You can not assign a new value to fallbacks after initialization.")
 
     @property
-    def map_to_parent(self) -> Optional[Dict[object, object]]:
-        """Dict[:obj:`object`, :obj:`object`]: Optional. A :obj:`dict` that can be
+    def map_to_parent(self) -> Optional[dict[object, object]]:
+        """dict[:obj:`object`, :obj:`object`]: Optional. A :obj:`dict` that can be
         used to instruct a nested :class:`ConversationHandler` to transition into a mapped state on
         its parent :class:`ConversationHandler` in place of a specified nested state.
         """

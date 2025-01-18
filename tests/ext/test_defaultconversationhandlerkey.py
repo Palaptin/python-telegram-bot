@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 #
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
-from typing import Any, List
+from typing import Any
 from unittest.mock import Mock
 from warnings import filterwarnings
 
@@ -218,7 +218,7 @@ class TestDefaultConversationHandlerKeyWithoutRequest:
             chat: bool = False, user: bool = False, message: bool = False
         ) -> tuple:
             # helper to evaluate if the update should have been handled or not
-            result: List[int] = []
+            result: list[int] = []
             if per_chat:
                 if not chat:
                     return NotImplemented

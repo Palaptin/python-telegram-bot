@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the DefaultConversationHandlerKey."""
-from typing import List, NoReturn, Union
+from typing import NoReturn, Union
 
 from telegram import Update
 from telegram._utils.warnings import warn
@@ -111,7 +111,7 @@ class DefaultConversationHandlerKey(ConversationHandlerKey):
         if not isinstance(update, Update):
             return NotImplemented
 
-        key: List[Union[int, str]] = []
+        key: list[Union[int, str]] = []
 
         if self.per_chat:
             if not update.effective_chat:

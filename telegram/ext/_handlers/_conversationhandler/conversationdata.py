@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # A library that provides a Python interface to the Telegram Bot API
-# Copyright (C) 2015-2024
+# Copyright (C) 2015-2025
 # Leandro Toledo de Souza <devs@python-telegram-bot.org>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains the ConversationData."""
-import datetime
+import datetime as dtm
 from dataclasses import dataclass
 from typing import Any, Generic, Optional, Union
 
@@ -57,7 +57,7 @@ class ConversationData(Generic[COD]):
         self,
         key: ConversationKey,
         state: object,
-        timeout: Optional[Union[float, datetime.timedelta]] = None,
+        timeout: Optional[Union[float, dtm.timedelta]] = None,
         update: Optional[object] = None,
         conversation_context_data: Optional[COD] = None,
     ):
@@ -67,7 +67,7 @@ class ConversationData(Generic[COD]):
             self.conversation_context_data = conversation_context_data
         self.key: ConversationKey = key
         self.state: object = state
-        self.timeout: Optional[Union[float, datetime.timedelta]] = timeout
+        self.timeout: Optional[Union[float, dtm.timedelta]] = timeout
         self.update = update
 
     def __eq__(self, other: object) -> bool:
