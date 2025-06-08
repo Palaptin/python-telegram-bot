@@ -68,7 +68,7 @@ from telegram.ext._handlers._conversationhandler.defaultconversationhandlerkey i
 )
 from telegram.warnings import PTBUserWarning
 from tests.auxil.build_messages import make_command_message
-from tests.auxil.files import PROJECT_ROOT_PATH
+from tests.auxil.files import SOURCE_ROOT_PATH
 from tests.auxil.pytest_classes import PytestBot, make_bot
 from tests.auxil.slots import mro_slots
 
@@ -823,8 +823,7 @@ class TestConversationHandlerWithoutRequest:
             assert recwarn[0].category is PTBUserWarning
             assert (
                 Path(recwarn[0].filename)
-                == PROJECT_ROOT_PATH
-                / "telegram"
+                == SOURCE_ROOT_PATH
                 / "ext"
                 / "_handlers"
                 / "_conversationhandler"
@@ -1256,8 +1255,7 @@ class TestConversationHandlerWithoutRequest:
                 assert warning.category is PTBUserWarning
                 assert (
                     Path(warning.filename)
-                    == PROJECT_ROOT_PATH
-                    / "telegram"
+                    == SOURCE_ROOT_PATH
                     / "ext"
                     / "_handlers"
                     / "_conversationhandler"
@@ -1617,8 +1615,7 @@ class TestConversationHandlerWithoutRequest:
             assert str(recwarn[0].message).startswith("ApplicationHandlerStop in TIMEOUT")
             assert recwarn[0].category is PTBUserWarning
             assert (
-                Path(recwarn[0].filename)
-                == PROJECT_ROOT_PATH / "telegram" / "ext" / "_jobqueue.py"
+                Path(recwarn[0].filename) == SOURCE_ROOT_PATH / "ext" / "_jobqueue.py"
             ), "wrong stacklevel!"
 
             await app.stop()
@@ -1629,7 +1626,7 @@ class TestConversationHandlerWithoutRequest:
         context = None
 
         async def start_callback(u: Update, c: ContextTypes.DEFAULT_TYPE) -> None:
-            nonlocal context, self
+            nonlocal context
             context = c
             return await self.start(u, c)
 
@@ -1650,7 +1647,6 @@ class TestConversationHandlerWithoutRequest:
         update = Update(update_id=0, message=message)
 
         async def timeout_callback(u: Update, c: ContextTypes.DEFAULT_TYPE) -> None:
-            nonlocal update, context
             assert u is update
             assert c is context
 

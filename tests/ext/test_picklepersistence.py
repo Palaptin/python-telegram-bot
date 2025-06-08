@@ -29,7 +29,7 @@ from telegram import Chat, Message, TelegramObject, Update, User
 from telegram.ext import ContextTypes, ConversationData, PersistenceInput, PicklePersistence
 from telegram.ext._picklepersistence import _BotUnpickler
 from telegram.warnings import PTBUserWarning
-from tests.auxil.files import PROJECT_ROOT_PATH
+from tests.auxil.files import SOURCE_ROOT_PATH
 from tests.auxil.pytest_classes import make_bot
 from tests.auxil.slots import mro_slots
 
@@ -917,8 +917,7 @@ class TestPicklePersistenceWithoutRequest:
         assert recwarn[-1].category is PTBUserWarning
         assert str(recwarn[-1].message).startswith("Unknown bot instance found.")
         assert (
-            Path(recwarn[-1].filename)
-            == PROJECT_ROOT_PATH / "telegram" / "ext" / "_picklepersistence.py"
+            Path(recwarn[-1].filename) == SOURCE_ROOT_PATH / "ext" / "_picklepersistence.py"
         ), "wrong stacklevel!"
         pp = PicklePersistence("pickletest", single_file=False, on_flush=False)
         pp.set_bot(bot)

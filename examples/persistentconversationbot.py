@@ -22,6 +22,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    ConversationStates,
     MessageHandler,
     PicklePersistence,
     filters,
@@ -137,7 +138,7 @@ def main() -> None:
     application = Application.builder().token("TOKEN").persistence(persistence).build()
 
     # Add conversation handler with the states CHOOSING, TYPING_CHOICE and TYPING_REPLY
-    conv_handler = ConversationHandler(
+    conversation_states = ConversationStates(
         entry_points=[CommandHandler("start", start)],
         states={
             CHOOSING: [
@@ -159,6 +160,9 @@ def main() -> None:
             ],
         },
         fallbacks=[MessageHandler(filters.Regex("^Done$"), done)],
+    )
+    conv_handler = ConversationHandler(
+        conversation_states=conversation_states,
         name="my_conversation",
         persistent=True,
     )

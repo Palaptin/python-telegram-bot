@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 """This module contains exceptions to our API compared to the official API."""
+import datetime as dtm
 
 from telegram import Animation, Audio, Document, Gift, PhotoSize, Sticker, Video, VideoNote, Voice
 from tests.test_official.helpers import _get_params_base
@@ -54,6 +55,12 @@ class ParamTypeCheckingExceptions:
         "replace_sticker_in_set": {
             "old_sticker$": Sticker,
         },
+        # The underscore will match any method
+        r"\w+_[\w_]+": {
+            "duration": dtm.timedelta,
+            r"\w+_period": dtm.timedelta,
+            "cache_time": dtm.timedelta,
+        },
     }
 
     # TODO: Look into merging this with COMPLEX_TYPES
@@ -65,36 +72,51 @@ class ParamTypeCheckingExceptions:
         ("keyboard", True): "KeyboardButton",  # + sequence[sequence[str]]
         ("reaction", False): "ReactionType",  # + str
         ("options", False): "InputPollOption",  # + str
-        # TODO: Deprecated and will be corrected (and removed) in next major PTB version:
-        ("file_hashes", True): "list[str]",
     }
 
     # Special cases for other parameters that accept more types than the official API, and are
     # too complex to compare/predict with official API
     # structure: class/method_name: {param_name: reduced form of annotation}
-    COMPLEX_TYPES = (
-        {  # (param_name, is_class (i.e appears in a class?)): reduced form of annotation
-            "send_poll": {"correct_option_id": int},  # actual: Literal
-            "get_file": {
-                "file_id": str,  # actual: Union[str, objs_with_file_id_attr]
-            },
-            r"\w+invite_link": {
-                "invite_link": str,  # actual: Union[str, ChatInviteLink]
-            },
-            "send_invoice|create_invoice_link": {
-                "provider_data": str,  # actual: Union[str, obj]
-            },
-            "InlineKeyboardButton": {
-                "callback_data": str,  # actual: Union[str, obj]
-            },
-            "Input(Paid)?Media.*": {
-                "media": str,  # actual: Union[str, InputMedia*, FileInput]
-            },
-            "EncryptedPassportElement": {
-                "data": str,  # actual: Union[IdDocumentData, PersonalDetails, ResidentialAddress]
-            },
-        }
-    )
+    COMPLEX_TYPES = {
+        "send_poll": {"correct_option_id": int},  # actual: Literal
+        "get_file": {
+            "file_id": str,  # actual: Union[str, objs_with_file_id_attr]
+        },
+        r"\w+invite_link": {
+            "invite_link": str,  # actual: Union[str, ChatInviteLink]
+        },
+        "send_invoice|create_invoice_link": {
+            "provider_data": str,  # actual: Union[str, obj]
+        },
+        "InlineKeyboardButton": {
+            "callback_data": str,  # actual: Union[str, obj]
+        },
+        "Input(Paid)?Media.*": {
+            "media": str,  # actual: Union[str, InputMedia*, FileInput]
+            # see also https://github.com/tdlib/telegram-bot-api/issues/707
+            "thumbnail": str,  # actual: Union[str, FileInput]
+            "cover": str,  # actual: Union[str, FileInput]
+        },
+        "InputProfilePhotoStatic": {
+            "photo": str,  # actual: Union[str, FileInput]
+        },
+        "InputProfilePhotoAnimated": {
+            "animation": str,  # actual: Union[str, FileInput]
+            "main_frame_timestamp": float,  # actual: Union[float, dtm.timedelta]
+        },
+        "InputSticker": {
+            "sticker": str,  # actual: Union[str, FileInput]
+        },
+        "InputStoryContent.*": {
+            "photo": str,  # actual: Union[str, FileInput]
+            "video": str,  # actual: Union[str, FileInput]
+            "duration": float,  # actual: dtm.timedelta
+            "cover_frame_timestamp": float,  # actual: dtm.timedelta
+        },
+        "EncryptedPassportElement": {
+            "data": str,  # actual: Union[IdDocumentData, PersonalDetails, ResidentialAddress]
+        },
+    }
 
     # param names ignored in the param type checking in classes for the `tg.Defaults` case.
     IGNORED_DEFAULTS_PARAM_NAMES = {
@@ -104,11 +126,6 @@ class ParamTypeCheckingExceptions:
 
     # These classes' params are all ODVInput, so we ignore them in the defaults type checking.
     IGNORED_DEFAULTS_CLASSES = {"LinkPreviewOptions"}
-
-    # TODO: Remove this in v22 when it becomes a datetime (also remove from arg_type_checker.py)
-    DATETIME_EXCEPTIONS = {
-        "file_date",
-    }
 
 
 # Arguments *added* to the official API
@@ -143,11 +160,19 @@ PTB_EXTRA_PARAMS = {
     "ReactionType": {"type"},  # attributes common to all subclasses
     "BackgroundType": {"type"},  # attributes common to all subclasses
     "BackgroundFill": {"type"},  # attributes common to all subclasses
+    "OwnedGift": {"type"},  # attributes common to all subclasses
     "InputTextMessageContent": {"disable_web_page_preview"},  # convenience arg, here for bw compat
     "RevenueWithdrawalState": {"type"},  # attributes common to all subclasses
     "TransactionPartner": {"type"},  # attributes common to all subclasses
     "PaidMedia": {"type"},  # attributes common to all subclasses
     "InputPaidMedia": {"type", "media"},  # attributes common to all subclasses
+    "InputStoryContent": {"type"},  # attributes common to all subclasses
+    "StoryAreaType": {"type"},  # attributes common to all subclasses
+    # backwards compatibility for api 9.0 changes
+    # tags: deprecated NEXT.VERSION, bot api 9.0
+    "BusinessConnection": {"can_reply"},
+    "ChatFullInfo": {"can_send_gift"},
+    "InputProfilePhoto": {"type"},  # attributes common to all subclasses
 }
 
 
@@ -176,6 +201,10 @@ PTB_IGNORED_PARAMS = {
     r"TransactionPartner\w+": {"type"},
     r"PaidMedia\w+": {"type"},
     r"InputPaidMedia\w+": {"type"},
+    r"InputProfilePhoto\w+": {"type"},
+    r"OwnedGift\w+": {"type"},
+    r"InputStoryContent\w+": {"type"},
+    r"StoryAreaType\w+": {"type"},
 }
 
 
@@ -191,6 +220,11 @@ IGNORED_PARAM_REQUIREMENTS = {
     "send_venue": {"latitude", "longitude", "title", "address"},
     "send_contact": {"phone_number", "first_name"},
     # ---->
+    # backwards compatibility for api 9.0 changes
+    # tags: deprecated NEXT.VERSION, bot api 9.0
+    "BusinessConnection": {"is_enabled"},
+    "ChatFullInfo": {"accepted_gift_types"},
+    "TransactionPartnerUser": {"transaction_type"},
 }
 
 
@@ -199,10 +233,7 @@ def ignored_param_requirements(object_name: str) -> set[str]:
 
 
 # Arguments that are optional arguments for now for backwards compatibility
-BACKWARDS_COMPAT_KWARGS: dict[str, set[str]] = {
-    "send_invoice|create_invoice_link|InputInvoiceMessageContent": {"provider_token"},
-    "InlineQueryResultArticle": {"hide_url"},
-}
+BACKWARDS_COMPAT_KWARGS: dict[str, set[str]] = {}
 
 
 def backwards_compat_kwargs(object_name: str) -> set[str]:

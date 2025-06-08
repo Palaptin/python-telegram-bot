@@ -23,6 +23,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    ConversationStates,
 )
 
 # Enable logging
@@ -173,7 +174,7 @@ def main() -> None:
     # ^ means "start of line/string"
     # $ means "end of line/string"
     # So ^ABC$ will only allow 'ABC'
-    conv_handler = ConversationHandler(
+    conversation_states = ConversationStates(
         entry_points=[CommandHandler("start", start)],
         states={
             START_ROUTES: [
@@ -189,6 +190,7 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("start", start)],
     )
+    conv_handler = ConversationHandler(conversation_states=conversation_states)
 
     # Add ConversationHandler to application that will be used for handling updates
     application.add_handler(conv_handler)

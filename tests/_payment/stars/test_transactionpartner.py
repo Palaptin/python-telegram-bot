@@ -22,12 +22,14 @@ import pytest
 
 from telegram import (
     AffiliateInfo,
+    Chat,
     Gift,
     PaidMediaVideo,
     RevenueWithdrawalStatePending,
     Sticker,
     TransactionPartner,
     TransactionPartnerAffiliateProgram,
+    TransactionPartnerChat,
     TransactionPartnerFragment,
     TransactionPartnerOther,
     TransactionPartnerTelegramAds,
@@ -61,6 +63,7 @@ class TransactionPartnerTestBase:
         first_name="user",
         last_name="user",
     )
+    transaction_type = "premium_purchase"
     invoice_payload = "invoice_payload"
     paid_media = (
         PaidMediaVideo(
@@ -95,6 +98,11 @@ class TransactionPartnerTestBase:
         amount=42,
     )
     request_count = 42
+    chat = Chat(
+        id=3,
+        type=Chat.CHANNEL,
+    )
+    premium_subscription_duration = 3
 
 
 class TestTransactionPartnerWithoutRequest(TransactionPartnerTestBase):
@@ -123,6 +131,7 @@ class TestTransactionPartnerWithoutRequest(TransactionPartnerTestBase):
             ("telegram_ads", TransactionPartnerTelegramAds),
             ("telegram_api", TransactionPartnerTelegramApi),
             ("other", TransactionPartnerOther),
+            ("chat", TransactionPartnerChat),
         ],
     )
     def test_subclass(self, offline_bot, tp_type, subclass):
@@ -130,6 +139,7 @@ class TestTransactionPartnerWithoutRequest(TransactionPartnerTestBase):
             "type": tp_type,
             "commission_per_mille": self.commission_per_mille,
             "user": self.user.to_dict(),
+            "transaction_type": self.transaction_type,
             "request_count": self.request_count,
         }
         tp = TransactionPartner.de_json(json_dict, offline_bot)
@@ -261,11 +271,13 @@ class TestTransactionPartnerFragmentWithoutRequest(TransactionPartnerTestBase):
 @pytest.fixture
 def transaction_partner_user():
     return TransactionPartnerUser(
+        transaction_type=TransactionPartnerTestBase.transaction_type,
         user=TransactionPartnerTestBase.user,
         invoice_payload=TransactionPartnerTestBase.invoice_payload,
         paid_media=TransactionPartnerTestBase.paid_media,
         paid_media_payload=TransactionPartnerTestBase.paid_media_payload,
         subscription_period=TransactionPartnerTestBase.subscription_period,
+        premium_subscription_duration=TransactionPartnerTestBase.premium_subscription_duration,
     )
 
 
@@ -281,36 +293,48 @@ class TestTransactionPartnerUserWithoutRequest(TransactionPartnerTestBase):
     def test_de_json(self, offline_bot):
         json_dict = {
             "user": self.user.to_dict(),
+            "transaction_type": self.transaction_type,
             "invoice_payload": self.invoice_payload,
             "paid_media": [pm.to_dict() for pm in self.paid_media],
             "paid_media_payload": self.paid_media_payload,
             "subscription_period": self.subscription_period.total_seconds(),
+            "premium_subscription_duration": self.premium_subscription_duration,
         }
         tp = TransactionPartnerUser.de_json(json_dict, offline_bot)
         assert tp.api_kwargs == {}
         assert tp.type == "user"
         assert tp.user == self.user
+        assert tp.transaction_type == self.transaction_type
         assert tp.invoice_payload == self.invoice_payload
         assert tp.paid_media == self.paid_media
         assert tp.paid_media_payload == self.paid_media_payload
         assert tp.subscription_period == self.subscription_period
+        assert tp.premium_subscription_duration == self.premium_subscription_duration
 
     def test_to_dict(self, transaction_partner_user):
         json_dict = transaction_partner_user.to_dict()
         assert json_dict["type"] == self.type
+        assert json_dict["transaction_type"] == self.transaction_type
         assert json_dict["user"] == self.user.to_dict()
         assert json_dict["invoice_payload"] == self.invoice_payload
         assert json_dict["paid_media"] == [pm.to_dict() for pm in self.paid_media]
         assert json_dict["paid_media_payload"] == self.paid_media_payload
         assert json_dict["subscription_period"] == self.subscription_period.total_seconds()
+        assert json_dict["premium_subscription_duration"] == self.premium_subscription_duration
+
+    def test_transaction_type_is_required_argument(self):
+        with pytest.raises(TypeError, match="`transaction_type` is a required argument"):
+            TransactionPartnerUser(user=self.user)
 
     def test_equality(self, transaction_partner_user):
         a = transaction_partner_user
         b = TransactionPartnerUser(
             user=self.user,
+            transaction_type=self.transaction_type,
         )
         c = TransactionPartnerUser(
             user=User(id=1, is_bot=False, first_name="user", last_name="user"),
+            transaction_type=self.transaction_type,
         )
         d = User(id=1, is_bot=False, first_name="user", last_name="user")
 
@@ -441,6 +465,61 @@ class TestTransactionPartnerTelegramApiWithoutRequest(TransactionPartnerTestBase
             request_count=0,
         )
         d = User(id=1, is_bot=False, first_name="user", last_name="user")
+
+        assert a == b
+        assert hash(a) == hash(b)
+
+        assert a != c
+        assert hash(a) != hash(c)
+
+        assert a != d
+        assert hash(a) != hash(d)
+
+
+@pytest.fixture
+def transaction_partner_chat():
+    return TransactionPartnerChat(
+        chat=TransactionPartnerTestBase.chat,
+        gift=TransactionPartnerTestBase.gift,
+    )
+
+
+class TestTransactionPartnerChatWithoutRequest(TransactionPartnerTestBase):
+    type = TransactionPartnerType.CHAT
+
+    def test_slot_behaviour(self, transaction_partner_chat):
+        inst = transaction_partner_chat
+        for attr in inst.__slots__:
+            assert getattr(inst, attr, "err") != "err", f"got extra slot '{attr}'"
+        assert len(mro_slots(inst)) == len(set(mro_slots(inst))), "duplicate slot"
+
+    def test_de_json(self, offline_bot):
+        json_dict = {
+            "chat": self.chat.to_dict(),
+            "gift": self.gift.to_dict(),
+        }
+        tp = TransactionPartnerChat.de_json(json_dict, offline_bot)
+        assert tp.api_kwargs == {}
+        assert tp.type == "chat"
+        assert tp.chat == self.chat
+        assert tp.gift == self.gift
+
+    def test_to_dict(self, transaction_partner_chat):
+        json_dict = transaction_partner_chat.to_dict()
+        assert json_dict["type"] == self.type
+        assert json_dict["chat"] == self.chat.to_dict()
+        assert json_dict["gift"] == self.gift.to_dict()
+
+    def test_equality(self, transaction_partner_chat):
+        a = transaction_partner_chat
+        b = TransactionPartnerChat(
+            chat=self.chat,
+            gift=self.gift,
+        )
+        c = TransactionPartnerChat(
+            chat=Chat(id=1, type=Chat.CHANNEL),
+        )
+        d = Chat(id=1, type=Chat.CHANNEL)
 
         assert a == b
         assert hash(a) == hash(b)

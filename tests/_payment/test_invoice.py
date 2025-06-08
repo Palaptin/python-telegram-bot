@@ -127,12 +127,12 @@ class TestInvoiceWithoutRequest(InvoiceTestBase):
     async def test_send_all_args_create_invoice_link(
         self, offline_bot, monkeypatch, subscription_period
     ):
-        async def make_assertion(*args, **_):
-            kwargs = args[1]
+        async def make_assertion(url, request_data: RequestData, *args, **kwargs):
+            kwargs = request_data.parameters
             sp = kwargs.pop("subscription_period") == 42
             return all(kwargs[i] == i for i in kwargs) and sp
 
-        monkeypatch.setattr(offline_bot, "_post", make_assertion)
+        monkeypatch.setattr(offline_bot.request, "post", make_assertion)
         assert await offline_bot.create_invoice_link(
             title="title",
             description="description",
@@ -269,9 +269,9 @@ class TestInvoiceWithRequest(InvoiceTestBase):
                     self.title,
                     self.description,
                     self.payload,
-                    provider_token,
                     self.currency,
                     self.prices,
+                    provider_token,
                     **kwargs,
                 )
                 for kwargs in ({}, {"protect_content": False})
@@ -301,7 +301,6 @@ class TestInvoiceWithRequest(InvoiceTestBase):
                 self.title,
                 self.description,
                 self.payload,
-                "",  # using tg stars
                 "XTR",
                 [self.prices[0]],
                 allow_sending_without_reply=custom,
@@ -315,9 +314,9 @@ class TestInvoiceWithRequest(InvoiceTestBase):
                 self.title,
                 self.description,
                 self.payload,
-                provider_token,
                 self.currency,
                 self.prices,
+                provider_token,
                 reply_to_message_id=reply_to_message.message_id,
             )
             assert message.reply_to_message is None
@@ -328,9 +327,9 @@ class TestInvoiceWithRequest(InvoiceTestBase):
                     self.title,
                     self.description,
                     self.payload,
-                    provider_token,
                     self.currency,
                     self.prices,
+                    provider_token,
                     reply_to_message_id=reply_to_message.message_id,
                 )
 
@@ -340,9 +339,9 @@ class TestInvoiceWithRequest(InvoiceTestBase):
             self.title,
             self.description,
             self.payload,
-            provider_token,
             self.currency,
             self.prices,
+            provider_token=provider_token,
             max_tip_amount=self.max_tip_amount,
             suggested_tip_amounts=self.suggested_tip_amounts,
             start_parameter=self.start_parameter,

@@ -17,6 +17,7 @@
 # You should have received a copy of the GNU Lesser Public License
 # along with this program.  If not, see [http://www.gnu.org/licenses/].
 import asyncio
+import datetime as dtm
 import os
 from pathlib import Path
 
@@ -45,6 +46,8 @@ class VideoTestBase:
     mime_type = "video/mp4"
     supports_streaming = True
     file_name = "telegram.mp4"
+    start_timestamp = 3
+    cover = (PhotoSize("file_id", "unique_id", 640, 360, file_size=0),)
     thumb_width = 180
     thumb_height = 320
     thumb_file_size = 1767
@@ -91,6 +94,8 @@ class TestVideoWithoutRequest(VideoTestBase):
             "mime_type": self.mime_type,
             "file_size": self.file_size,
             "file_name": self.file_name,
+            "start_timestamp": self.start_timestamp,
+            "cover": [photo_size.to_dict() for photo_size in self.cover],
         }
         json_video = Video.de_json(json_dict, offline_bot)
         assert json_video.api_kwargs == {}
@@ -103,6 +108,8 @@ class TestVideoWithoutRequest(VideoTestBase):
         assert json_video.mime_type == self.mime_type
         assert json_video.file_size == self.file_size
         assert json_video.file_name == self.file_name
+        assert json_video.start_timestamp == self.start_timestamp
+        assert json_video.cover == self.cover
 
     def test_to_dict(self, video):
         video_dict = video.to_dict()
@@ -221,11 +228,14 @@ class TestVideoWithoutRequest(VideoTestBase):
 
 
 class TestVideoWithRequest(VideoTestBase):
-    async def test_send_all_args(self, bot, chat_id, video_file, video, thumb_file):
+    @pytest.mark.parametrize("duration", [dtm.timedelta(seconds=5), 5])
+    async def test_send_all_args(
+        self, bot, chat_id, video_file, video, thumb_file, photo_file, duration
+    ):
         message = await bot.send_video(
             chat_id,
             video_file,
-            duration=self.duration,
+            duration=duration,
             caption=self.caption,
             supports_streaming=self.supports_streaming,
             disable_notification=False,
@@ -234,6 +244,8 @@ class TestVideoWithRequest(VideoTestBase):
             height=video.height,
             parse_mode="Markdown",
             thumbnail=thumb_file,
+            cover=photo_file,
+            start_timestamp=self.start_timestamp,
             has_spoiler=True,
             show_caption_above_media=True,
         )
@@ -253,6 +265,11 @@ class TestVideoWithRequest(VideoTestBase):
         assert message.video.thumbnail.file_size == self.thumb_file_size
         assert message.video.thumbnail.width == self.thumb_width
         assert message.video.thumbnail.height == self.thumb_height
+
+        assert message.video.start_timestamp == self.start_timestamp
+
+        assert isinstance(message.video.cover, tuple)
+        assert isinstance(message.video.cover[0], PhotoSize)
 
         assert message.video.file_name == self.file_name
         assert message.has_protected_content

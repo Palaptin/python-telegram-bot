@@ -22,11 +22,13 @@ Your bot can accept payments from Telegram users. Please see the `introduction t
     telegram.shippingaddress
     telegram.shippingoption
     telegram.shippingquery
+    telegram.staramount
     telegram.startransaction
     telegram.startransactions
     telegram.successfulpayment
     telegram.transactionpartner
     telegram.transactionpartneraffiliateprogram
+    telegram.transactionpartnerchat
     telegram.transactionpartnerfragment
     telegram.transactionpartnerother
     telegram.transactionpartnertelegramads

@@ -38,7 +38,6 @@ from telegram import (
     BotDescription,
     BotName,
     BotShortDescription,
-    BusinessConnection,
     CallbackQuery,
     Chat,
     ChatAdministratorRights,
@@ -95,7 +94,7 @@ from telegram.error import BadRequest, EndPointNotFound, InvalidToken
 from telegram.ext import ExtBot, InvalidCallbackData
 from telegram.helpers import escape_markdown
 from telegram.request import BaseRequest, HTTPXRequest, RequestData
-from telegram.warnings import PTBDeprecationWarning, PTBUserWarning
+from telegram.warnings import PTBUserWarning
 from tests.auxil.bot_method_checks import check_defaults_handling
 from tests.auxil.ci_bots import FALLBACKS
 from tests.auxil.envvars import GITHUB_ACTIONS
@@ -235,7 +234,9 @@ class TestBotWithoutRequest:
 
     @pytest.mark.parametrize("bot_class", [Bot, ExtBot])
     def test_slot_behaviour(self, bot_class, offline_bot):
-        inst = bot_class(offline_bot.token)
+        inst = bot_class(
+            offline_bot.token, request=OfflineRequest(1), get_updates_request=OfflineRequest(1)
+        )
         for attr in inst.__slots__:
             assert getattr(inst, attr, "err") != "err", f"got extra slot '{attr}'"
         assert len(mro_slots(inst)) == len(set(mro_slots(inst))), "duplicate slot"
@@ -243,6 +244,71 @@ class TestBotWithoutRequest:
     async def test_no_token_passed(self):
         with pytest.raises(InvalidToken, match="You must pass the token"):
             Bot("")
+
+    def test_base_url_parsing_basic(self, caplog):
+        with caplog.at_level(logging.DEBUG):
+            bot = Bot(
+                token="!!Test String!!",
+                base_url="base/",
+                base_file_url="base/",
+                request=OfflineRequest(1),
+                get_updates_request=OfflineRequest(1),
+            )
+
+        assert bot.base_url == "base/!!Test String!!"
+        assert bot.base_file_url == "base/!!Test String!!"
+
+        assert len(caplog.records) >= 2
+        messages = [record.getMessage() for record in caplog.records]
+        assert "Set Bot API URL: base/!!Test String!!" in messages
+        assert "Set Bot API File URL: base/!!Test String!!" in messages
+
+    @pytest.mark.parametrize(
+        "insert_key", ["token", "TOKEN", "bot_token", "BOT_TOKEN", "bot-token", "BOT-TOKEN"]
+    )
+    def test_base_url_parsing_string_format(self, insert_key, caplog):
+        string = f"{{{insert_key}}}"
+
+        with caplog.at_level(logging.DEBUG):
+            bot = Bot(
+                token="!!Test String!!",
+                base_url=string,
+                base_file_url=string,
+                request=OfflineRequest(1),
+                get_updates_request=OfflineRequest(1),
+            )
+
+        assert bot.base_url == "!!Test String!!"
+        assert bot.base_file_url == "!!Test String!!"
+
+        assert len(caplog.records) >= 2
+        messages = [record.getMessage() for record in caplog.records]
+        assert "Set Bot API URL: !!Test String!!" in messages
+        assert "Set Bot API File URL: !!Test String!!" in messages
+
+        with pytest.raises(KeyError, match="unsupported insertion: unknown"):
+            Bot("token", base_url="{unknown}{token}")
+
+    def test_base_url_parsing_callable(self, caplog):
+        def build_url(_: str) -> str:
+            return "!!Test String!!"
+
+        with caplog.at_level(logging.DEBUG):
+            bot = Bot(
+                token="some-token",
+                base_url=build_url,
+                base_file_url=build_url,
+                request=OfflineRequest(1),
+                get_updates_request=OfflineRequest(1),
+            )
+
+        assert bot.base_url == "!!Test String!!"
+        assert bot.base_file_url == "!!Test String!!"
+
+        assert len(caplog.records) >= 2
+        messages = [record.getMessage() for record in caplog.records]
+        assert "Set Bot API URL: !!Test String!!" in messages
+        assert "Set Bot API File URL: !!Test String!!" in messages
 
     async def test_repr(self):
         offline_bot = Bot(token="some_token", base_file_url="")
@@ -335,6 +401,21 @@ class TestBotWithoutRequest:
 
         assert self.test_flag == "stop"
 
+    async def test_shutdown_at_error_in_request_in_init(self, monkeypatch, offline_bot):
+        async def get_me_error():
+            raise httpx.HTTPError("BadRequest wrong token sry :(")
+
+        async def shutdown(*args):
+            self.test_flag = "stop"
+
+        monkeypatch.setattr(offline_bot, "get_me", get_me_error)
+        monkeypatch.setattr(offline_bot, "shutdown", shutdown)
+
+        async with offline_bot:
+            pass
+
+        assert self.test_flag == "stop"
+
     async def test_equality(self):
         async with (
             make_bot(token=FALLBACKS[0]["token"]) as a,
@@ -409,9 +490,10 @@ class TestBotWithoutRequest:
         ("cls", "logger_name"), [(Bot, "telegram.Bot"), (ExtBot, "telegram.ext.ExtBot")]
     )
     async def test_bot_method_logging(self, offline_bot: PytestExtBot, cls, logger_name, caplog):
+        instance = cls(offline_bot.token)
         # Second argument makes sure that we ignore logs from e.g. httpx
         with caplog.at_level(logging.DEBUG, logger="telegram"):
-            await cls(offline_bot.token).get_me()
+            await instance.get_me()
             # Only for stabilizing this test-
             if len(caplog.records) == 4:
                 for idx, record in enumerate(caplog.records):
@@ -460,7 +542,7 @@ class TestBotWithoutRequest:
         if bot_method_name.replace("_", "").lower() != "getupdates" and bot_class is ExtBot:
             assert rate_arg in param_names, f"{bot_method} is missing the parameter `{rate_arg}`"
 
-    @bot_methods(ext_bot=False)
+    @bot_methods()
     async def test_defaults_handling(
         self,
         bot_class,
@@ -613,7 +695,7 @@ class TestBotWithoutRequest:
 
     @pytest.mark.parametrize(
         "default_bot",
-        [{"parse_mode": "Markdown", "disable_web_page_preview": True}],
+        [{"parse_mode": "Markdown", "link_preview_options": LinkPreviewOptions(is_disabled=True)}],
         indirect=True,
     )
     @pytest.mark.parametrize(
@@ -719,11 +801,14 @@ class TestBotWithoutRequest:
 
     # TODO: Needs improvement. We need incoming inline query to test answer.
     @pytest.mark.parametrize("button_type", ["start", "web_app"])
-    async def test_answer_inline_query(self, monkeypatch, offline_bot, raw_bot, button_type):
+    @pytest.mark.parametrize("cache_time", [74, dtm.timedelta(seconds=74)])
+    async def test_answer_inline_query(
+        self, monkeypatch, offline_bot, raw_bot, button_type, cache_time
+    ):
         # For now just test that our internals pass the correct data
         async def make_assertion(url, request_data: RequestData, *args, **kwargs):
             expected = {
-                "cache_time": 300,
+                "cache_time": 74,
                 "results": [
                     {
                         "title": "first",
@@ -803,7 +888,7 @@ class TestBotWithoutRequest:
             assert await bot_type.answer_inline_query(
                 1234,
                 results=results,
-                cache_time=300,
+                cache_time=cache_time,
                 is_personal=True,
                 next_offset="42",
                 button=button,
@@ -905,7 +990,7 @@ class TestBotWithoutRequest:
 
     @pytest.mark.parametrize(
         "default_bot",
-        [{"parse_mode": "Markdown", "disable_web_page_preview": True}],
+        [{"parse_mode": "Markdown", "link_preview_options": LinkPreviewOptions(is_disabled=True)}],
         indirect=True,
     )
     async def test_answer_inline_query_default_parse_mode(self, monkeypatch, default_bot):
@@ -1259,21 +1344,22 @@ class TestBotWithoutRequest:
         assert await offline_bot.set_chat_administrator_custom_title(2, 32, "custom_title")
 
     # TODO: Needs improvement. Need an incoming callbackquery to test
-    async def test_answer_callback_query(self, monkeypatch, offline_bot):
+    @pytest.mark.parametrize("cache_time", [74, dtm.timedelta(seconds=74)])
+    async def test_answer_callback_query(self, monkeypatch, offline_bot, cache_time):
         # For now just test that our internals pass the correct data
         async def make_assertion(url, request_data: RequestData, *args, **kwargs):
             return request_data.parameters == {
                 "callback_query_id": 23,
                 "show_alert": True,
                 "url": "no_url",
-                "cache_time": 1,
+                "cache_time": 74,
                 "text": "answer",
             }
 
         monkeypatch.setattr(offline_bot.request, "post", make_assertion)
 
         assert await offline_bot.answer_callback_query(
-            23, text="answer", show_alert=True, url="no_url", cache_time=1
+            23, text="answer", show_alert=True, url="no_url", cache_time=cache_time
         )
 
     @pytest.mark.parametrize("drop_pending_updates", [True, False])
@@ -1545,6 +1631,7 @@ class TestBotWithoutRequest:
                     == [MessageEntity(MessageEntity.BOLD, 0, 4).to_dict()],
                     data["protect_content"] is True,
                     data["message_thread_id"] == 1,
+                    data["video_start_timestamp"] == 999,
                 ]
             ):
                 pytest.fail("I got wrong parameters in post")
@@ -1556,6 +1643,7 @@ class TestBotWithoutRequest:
             from_chat_id=chat_id,
             message_id=media_message.message_id,
             caption=caption,
+            video_start_timestamp=999,
             caption_entities=[MessageEntity(MessageEntity.BOLD, 0, 4)],
             parse_mode=ParseMode.HTML,
             reply_to_message_id=media_message.message_id,
@@ -2183,6 +2271,10 @@ class TestBotWithoutRequest:
                 )
                 return HTTPStatus.OK, b'{"ok": "True", "result": {}}'
 
+            @property
+            def read_timeout(self):
+                return 1
+
         custom_request = CustomRequest()
 
         offline_bot = Bot(offline_bot.token, request=custom_request)
@@ -2197,7 +2289,7 @@ class TestBotWithoutRequest:
         assert test_flag == (
             DEFAULT_NONE,
             DEFAULT_NONE,
-            20,
+            DEFAULT_NONE,
             DEFAULT_NONE,
         )
 
@@ -2280,26 +2372,6 @@ class TestBotWithoutRequest:
         monkeypatch.setattr(offline_bot.request, "post", make_assertion)
         assert await offline_bot.send_message(2, "text", allow_paid_broadcast=42)
 
-    async def test_get_business_connection(self, offline_bot, monkeypatch):
-        bci = "42"
-        user = User(1, "first", False)
-        user_chat_id = 1
-        date = dtm.datetime.utcnow()
-        can_reply = True
-        is_enabled = True
-        bc = BusinessConnection(bci, user, user_chat_id, date, can_reply, is_enabled).to_json()
-
-        async def do_request(*args, **kwargs):
-            data = kwargs.get("request_data")
-            obj = data.parameters.get("business_connection_id")
-            if obj == bci:
-                return 200, f'{{"ok": true, "result": {bc}}}'.encode()
-            return 400, b'{"ok": false, "result": []}'
-
-        monkeypatch.setattr(offline_bot.request, "do_request", do_request)
-        obj = await offline_bot.get_business_connection(business_connection_id=bci)
-        assert isinstance(obj, BusinessConnection)
-
     async def test_send_chat_action_all_args(self, bot, chat_id, monkeypatch):
         async def make_assertion(*args, **_):
             kwargs = args[1]
@@ -2312,6 +2384,61 @@ class TestBotWithoutRequest:
 
         monkeypatch.setattr(bot, "_post", make_assertion)
         assert await bot.send_chat_action(chat_id, "action", 1, 3)
+
+    async def test_gift_premium_subscription_all_args(self, bot, monkeypatch):
+        # can't make actual request so we just test that the correct data is passed
+        async def make_assertion(*args, **_):
+            kwargs = args[1]
+            return (
+                kwargs.get("user_id") == 12
+                and kwargs.get("month_count") == 3
+                and kwargs.get("star_count") == 1000
+                and kwargs.get("text") == "test text"
+                and kwargs.get("text_parse_mode") == "Markdown"
+                and kwargs.get("text_entities")
+                == [
+                    MessageEntity(MessageEntity.BOLD, 0, 3),
+                    MessageEntity(MessageEntity.ITALIC, 5, 11),
+                ]
+            )
+
+        monkeypatch.setattr(bot, "_post", make_assertion)
+        assert await bot.gift_premium_subscription(
+            user_id=12,
+            month_count=3,
+            star_count=1000,
+            text="test text",
+            text_parse_mode="Markdown",
+            text_entities=[
+                MessageEntity(MessageEntity.BOLD, 0, 3),
+                MessageEntity(MessageEntity.ITALIC, 5, 11),
+            ],
+        )
+
+    @pytest.mark.parametrize("default_bot", [{"parse_mode": "Markdown"}], indirect=True)
+    @pytest.mark.parametrize(
+        ("passed_value", "expected_value"),
+        [(DEFAULT_NONE, "Markdown"), ("HTML", "HTML"), (None, None)],
+    )
+    async def test_gift_premium_subscription_default_parse_mode(
+        self, default_bot, monkeypatch, passed_value, expected_value
+    ):
+        # can't make actual request so we just test that the correct data is passed
+        async def make_assertion(url, request_data, *args, **kwargs):
+            assert request_data.parameters.get("text_parse_mode") == expected_value
+            return True
+
+        monkeypatch.setattr(default_bot.request, "post", make_assertion)
+        kwargs = {
+            "user_id": 123,
+            "month_count": 3,
+            "star_count": 1000,
+            "text": "text",
+        }
+        if passed_value is not DEFAULT_NONE:
+            kwargs["text_parse_mode"] = passed_value
+
+        assert await default_bot.gift_premium_subscription(**kwargs)
 
     async def test_refund_star_payment(self, offline_bot, monkeypatch):
         # can't make actual request so we just test that the correct data is passed
@@ -2715,7 +2842,9 @@ class TestBotWithRequest:
         assert quiz_task.done()
 
     @pytest.mark.parametrize(
-        ("open_period", "close_date"), [(5, None), (None, True)], ids=["open_period", "close_date"]
+        ("open_period", "close_date"),
+        [(5, None), (dtm.timedelta(seconds=5), None), (None, True)],
+        ids=["open_period", "open_period-dtm", "close_date"],
     )
     async def test_send_open_period(self, bot, super_group_id, open_period, close_date):
         question = "Is this a test?"
@@ -3144,36 +3273,6 @@ class TestBotWithRequest:
         assert isinstance(updates, tuple)
         if updates:
             assert isinstance(updates[0], Update)
-
-    @pytest.mark.parametrize("bot_class", [Bot, ExtBot])
-    async def test_get_updates_read_timeout_deprecation_warning(
-        self, bot, recwarn, monkeypatch, bot_class
-    ):
-        # Using the normal HTTPXRequest should not issue any warnings
-        await bot.get_updates()
-        assert len(recwarn) == 0
-
-        # Now let's test deprecation warning when using get_updates for other BaseRequest
-        # subclasses (we just monkeypatch the existing HTTPXRequest for this)
-        read_timeout = None
-
-        async def catch_timeouts(*args, **kwargs):
-            nonlocal read_timeout
-            read_timeout = kwargs.get("read_timeout")
-            return HTTPStatus.OK, b'{"ok": "True", "result": {}}'
-
-        monkeypatch.setattr(HTTPXRequest, "read_timeout", BaseRequest.read_timeout)
-        monkeypatch.setattr(HTTPXRequest, "do_request", catch_timeouts)
-
-        bot = bot_class(get_updates_request=HTTPXRequest(), token=bot.token)
-        await bot.get_updates()
-
-        assert len(recwarn) == 1
-        assert "does not override the property `read_timeout`" in str(recwarn[0].message)
-        assert recwarn[0].category is PTBDeprecationWarning
-        assert recwarn[0].filename == __file__, "wrong stacklevel"
-
-        assert read_timeout == 2
 
     @pytest.mark.parametrize(
         ("read_timeout", "timeout", "expected"),
@@ -4135,7 +4234,7 @@ class TestBotWithRequest:
                 ]
             )
             await poll_message.stop_poll(reply_markup=reply_markup)
-            helper_message = await poll_message.reply_text("temp", quote=True)
+            helper_message = await poll_message.reply_text("temp", do_quote=True)
             message = helper_message.reply_to_message
             inline_keyboard = message.reply_markup.inline_keyboard
 
@@ -4417,13 +4516,14 @@ class TestBotWithRequest:
         assert isinstance(transactions, StarTransactions)
         assert len(transactions.transactions) == 0
 
+    @pytest.mark.parametrize("subscription_period", [2592000, dtm.timedelta(days=30)])
     async def test_create_edit_chat_subscription_link(
-        self, bot, subscription_channel_id, channel_id
+        self, bot, subscription_channel_id, channel_id, subscription_period
     ):
         sub_link = await bot.create_chat_subscription_invite_link(
             subscription_channel_id,
             name="sub_name",
-            subscription_period=2592000,
+            subscription_period=subscription_period,
             subscription_price=13,
         )
         assert sub_link.name == "sub_name"

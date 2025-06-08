@@ -35,6 +35,7 @@ from telegram import (
     InlineQueryResultArticle,
     InlineQueryResultCachedPhoto,
     InputMediaPhoto,
+    InputPaidMediaPhoto,
     InputTextMessageContent,
     LinkPreviewOptions,
     ReplyParameters,
@@ -285,8 +286,13 @@ def build_kwargs(
             elif name in ["prices", "commands", "errors"]:
                 kws[name] = []
             elif name == "media":
-                media = InputMediaPhoto("media", parse_mode=manually_passed_value)
-                if "list" in str(param.annotation).lower():
+                if "star_count" in signature.parameters:
+                    media = InputPaidMediaPhoto("media")
+                else:
+                    media = InputMediaPhoto("media", parse_mode=manually_passed_value)
+
+                param_annotation = str(param.annotation).lower()
+                if "sequence" in param_annotation or "list" in param_annotation:
                     kws[name] = [media]
                 else:
                     kws[name] = media
@@ -507,7 +513,8 @@ async def make_assertion(
             )
 
     media = data.pop("media", None)
-    if media:
+    paid_media = media and data.pop("star_count", None)
+    if media and not paid_media:
         if isinstance(media, dict) and isinstance(media.get("type", None), InputMediaType):
             check_input_media(media)
         else:
@@ -614,10 +621,8 @@ async def check_defaults_handling(
         kwargs_need_default.remove("parse_mode")
 
     defaults_no_custom_defaults = Defaults()
-    kwargs = {kwarg: "custom_default" for kwarg in inspect.signature(Defaults).parameters}
+    kwargs = dict.fromkeys(inspect.signature(Defaults).parameters, "custom_default")
     kwargs["tzinfo"] = zoneinfo.ZoneInfo("America/New_York")
-    kwargs.pop("disable_web_page_preview")  # mutually exclusive with link_preview_options
-    kwargs.pop("quote")  # mutually exclusive with do_quote
     kwargs["link_preview_options"] = LinkPreviewOptions(
         url="custom_default", show_above_text="custom_default"
     )
